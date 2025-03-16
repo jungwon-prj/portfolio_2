@@ -1,24 +1,22 @@
 # portfolio_2
 
-itss_dashboard.pptx => view_itsm/src/main/webapp/WEB-INF/views
-/frontend/dashboard/itss_dashboard
+itss_dashboard.pptx => view_itsm/src/main/webapp/WEB-INF/views/frontend/dashboard/itss_dashboard<br><br>
 
-itss_dashboard.jsp
-CaseController.java
-SYCaseService.java
-SYCaseDAO.java
-sy_case_mapper.xml
-SYCaseDashBoardVo.java
+itss_dashboard.jsp<br>
+CaseController.java<br>
+SYCaseService.java<br>
+SYCaseDAO.java<br>
+sy_case_mapper.xml<br>
+SYCaseDashBoardVo.java<br><br>
 
-ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ
-test_case.pptx => view_itsm/src/main/webapp/WEB-INF/views
-/frontend/menus/test_case
+ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ<br>
+test_case.pptx => view_itsm/src/main/webapp/WEB-INF/views/frontend/menus/test_case<br><br>
 
-test_case.jsp
-FrontendController.java
-CaseController.java
-SYCaseService.java
-SYCaseDAO.java
-ExportController.java
-ExportExcelUtil.java
+test_case.jsp<br>
+FrontendController.java<br>
+CaseController.java<br>
+SYCaseService.java<br>
+SYCaseDAO.java<br>
+ExportController.java<br>
+ExportExcelUtil.java<br>
 sy_case_mapper.xml
