@@ -8305,7 +8305,7 @@ textarea {
 			param_col_width = param_col_width.substr(0, param_col_width.length -1);
 		}
 		
-		var export_url = "/export/export_client_Case_jqgrid";
+		var export_url = "/export/export_client_Case_jqgrid"; 
 		var export_data = "file_name="+encodeURIComponent(fileName);
 			export_data += "&sheet_title="+encodeURIComponent(sheetTitle);
 			export_data += "&sheet_name="+encodeURIComponent(sheetName);
