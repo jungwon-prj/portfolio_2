@@ -1,0 +1,3390 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" 
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="kr.co.inssuf.itsm.dao.SYCaseDAO">
+		<!-- 
+			완료 기한 구하는 쿼리
+				
+			SELECT 
+				sp.* 
+			FROM 
+				service_processes_tbl sp
+			WHERE 
+				1=1
+			AND sp.service_process_id = 'SER_00'
+			AND sp.status != 'MD1258'
+			AND DATE(sp.plan_due_date) < SUBDATE(CURDATE(), DATE_FORMAT(CURDATE(),'%w')-1)
+		-->
+	 
+	<select id="selectQueueMember" parameterType="SYCaseVo" resultType="SYCaseVo">
+		SELECT 
+			qu.user_no, 
+			qu.user_id, 
+			qu.user_id AS member_id, 
+			u.user_nm, 
+			u.user_nm AS member_nm, 
+			qu.queue_code, 
+			( SELECT queue_nm FROM queue_tbl WHERE queue_code  = qu.queue_code ) as queue_nm, 
+			u.use_yn, 
+			u.dept_yn, u.dept_cd, 
+			( SELECT dept_nm FROM sy_organ_master WHERE dept_cd = u.dept_cd ) as dept_nm
+		FROM queue_user_tbl qu
+		INNER JOIN user_tbl u ON qu.user_no = u.user_no
+		WHERE 1=1
+		<if test="use_yn != null and !''.equals( use_yn )">
+			AND u.use_yn = #{use_yn} 
+		</if>
+		<if test="user_nm != null and !''.equals( user_nm )">
+			AND u.user_nm LIKE CONCAT('%', #{user_nm}, '%') 
+		</if>
+		AND 
+			qu.queue_code IN 
+				( SELECT queue_code FROM queue_user_tbl WHERE user_id  = #{member_id} )
+		GROUP BY qu.user_no
+		ORDER BY
+    		FIELD(qu.user_id, #{member_id}) DESC, u.user_no ASC
+	</select>
+	
+	<select id="selectQueueMember2Count" parameterType="SYCaseVo" resultType="int">
+		SELECT COUNT(*) 
+			FROM (
+				SELECT 
+		<!-- 			COUNT(*) -->
+					qu.*
+				FROM queue_user_tbl qu
+				INNER JOIN user_tbl u ON qu.user_no = u.user_no
+				WHERE 1=1
+				<if test="use_yn != null and !''.equals( use_yn )">
+					AND u.use_yn = #{use_yn} 
+				</if>
+				<if test="user_nm != null and !''.equals( user_nm )">
+					AND u.user_nm LIKE CONCAT('%', #{user_nm}, '%') 
+				</if>
+				AND 
+					qu.queue_code IN 
+						( SELECT queue_code FROM queue_user_tbl WHERE user_id  = #{member_id} )
+				GROUP BY qu.user_no
+		) s
+	</select>
+	
+	<select id="selectQueueMember2" parameterType="SYCaseVo" resultType="SYCaseVo">
+		SELECT 
+			qu.user_no as user_no, 
+			qu.user_id as user_id, 
+			qu.user_id AS member_id, 
+			u.user_nm as user_nm, 
+			u.user_nm AS member_nm, 
+			
+			u.user_email, u.user_pwd, u.user_nm, u.user_nm_en,
+			u.company_gubun_code, 
+			( SELECT code_nm FROM sy_code_detail WHERE detail_code = u.company_gubun_code ) as company_gubun_nm, 
+
+			u.company_code,
+			( SELECT code_nm FROM sy_code_detail WHERE detail_code = u.company_code ) as company_nm, 
+			
+			u.phone_no, 
+			u.class_code, 
+			( SELECT code_nm FROM sy_code_detail WHERE detail_code = u.class_code ) as class_nm, 
+			
+			u.mobile, 
+			u.business_reg_num, 
+			u.init_yn, u.pwd_chg_date, u.user_lang,
+			
+			qu.queue_code as queue_code, 
+			( SELECT queue_nm FROM queue_tbl WHERE queue_code  = qu.queue_code ) as queue_nm, 
+			u.use_yn
+		FROM queue_user_tbl qu
+		INNER JOIN user_tbl u ON qu.user_no = u.user_no
+		WHERE 1=1
+		<if test="use_yn != null and !''.equals( use_yn )">
+			AND u.use_yn = #{use_yn} 
+		</if>
+		<if test="user_nm != null and !''.equals( user_nm )">
+			AND u.user_nm LIKE CONCAT('%', #{user_nm}, '%') 
+		</if>
+		AND 
+			qu.queue_code IN 
+				( SELECT queue_code FROM queue_user_tbl WHERE user_id  = #{member_id} )
+		GROUP BY qu.user_no
+		ORDER BY
+    		FIELD(qu.user_id, #{member_id}) DESC, u.user_no ASC
+    	<if test="page != null and !page.equals('')">
+			LIMIT #{page}, #{rows}
+		</if>
+	</select>
+	
+	<select id="selectCaseMng" parameterType="SYCaseVo" resultType="SYCaseVo">
+		SELECT 
+			rm.request_id, 
+			rm.request_date, 
+			
+			( SELECT sp.control_gubun
+				FROM service_processes_tbl sp
+				WHERE sp.request_id = rm.request_id AND sp.service_process_seq = 0) AS control_gubun, 
+			
+			( SELECT sp.admin_level_type_code
+				FROM service_processes_tbl sp
+				WHERE sp.request_id = rm.request_id AND sp.service_process_seq = 0) AS admin_level_type_code, 
+			
+			( SELECT lt.user_level_type_code
+				FROM service_processes_tbl sp
+				INNER JOIN level_type_assign_master lt
+				ON lt.admin_level_type_code = sp.admin_level_type_code
+				WHERE sp.request_id = rm.request_id AND sp.service_process_seq = 0) AS user_level_type_code, 
+			
+			( SELECT lt.user_level_type_nm
+				FROM service_processes_tbl sp
+				INNER JOIN level_type_assign_master lt
+				ON lt.admin_level_type_code = sp.admin_level_type_code
+				WHERE sp.request_id = rm.request_id AND sp.service_process_seq = 0) AS user_level_type_nm, 
+			
+			( SELECT request_seq 
+				FROM service_processes_tbl sp 
+				WHERE sp.request_id = rm.request_id 
+				AND	sp.service_process_seq = 0
+			) AS request_seq, 
+			
+			( SELECT owner_id 
+				FROM service_processes_tbl sp 
+				WHERE sp.request_id = rm.request_id AND	sp.use_yn = 'Y'
+				AND sp.service_process_seq != 0
+				ORDER BY sp.service_process_seq DESC LIMIT 1 
+			) AS n_owner_id, 
+			
+			( SELECT date_updated 
+				FROM service_processes_tbl sp 
+				WHERE sp.request_id = rm.request_id AND	sp.use_yn = 'Y'
+				AND sp.service_process_seq != 0
+				ORDER BY sp.service_process_seq DESC LIMIT 1 
+			) AS value1, 
+			
+			( SELECT process_date 
+				FROM service_processes_tbl sp 
+				WHERE sp.request_id = rm.request_id AND	sp.use_yn = 'Y'
+				AND sp.service_process_seq != 0
+				ORDER BY sp.service_process_seq DESC LIMIT 1 
+			) AS process_date, 
+			( SELECT owner_nm 
+				FROM service_processes_tbl sp 
+				WHERE sp.request_id = rm.request_id AND	sp.use_yn = 'Y'
+				AND sp.service_process_seq != 0
+				ORDER BY sp.service_process_seq DESC LIMIT 1 
+			) AS n_owner_nm, 
+			
+			rm.requester_id, rm.requester_nm, 
+			rm.system_info_code, 
+			( SELECT system_info_nm FROM system_info_master
+			  WHERE system_info_code = rm.system_info_code ) AS 'system_info_nm', 
+			  
+			rm.request_type, 
+			( SELECT request_type_nm FROM request_type_master
+			  WHERE request_type_code = rm.request_type ) AS 'request_type_nm', 
+			  
+			rm.request_category, 
+			( SELECT request_category_nm FROM request_category_master
+			  WHERE request_category_code = rm.request_category ) AS 'request_category_nm', 
+			
+			rm.request_category_item, 
+			( SELECT request_category_item_nm FROM request_category_item
+			  WHERE request_item_code = rm.request_category_item) AS 'request_category_item_nm',
+			
+			rm.title, rm.context, rm.file_group, 
+			
+			f.file_path, f.file_name, f.file_no, 
+			
+			rm.status, 
+			(SELECT code_nm FROM sy_code_detail WHERE master_code = 'MC1015' AND  detail_code = rm.status) AS status_nm, 
+			
+			rm.plan_due_date,
+			rm.request_due_date,
+			rm.priority_code,
+			
+			rm.comment,
+			rm.use_yn,
+			rm.creator, rm.updater,
+			rm.date_created, rm.date_updated
+		FROM request_management_tbl rm
+		LEFT OUTER JOIN sy_file_info f
+		ON rm.file_group = f.file_group
+		WHERE 
+			1=1
+		  	<if test="request_id != null and !''.equals(request_id) ">
+				AND rm.request_id = #{request_id}
+			</if>
+		  	<if test="request_seq != null and !''.equals(request_seq) ">
+				AND ( SELECT request_seq 
+				FROM service_processes_tbl sp 
+				WHERE sp.request_id = rm.request_id 
+				AND	sp.service_process_seq = 0
+			) = #{request_seq}
+			</if>
+			<if test="requester_id != null and !''.equals(requester_id) ">
+				AND 
+					(
+ 						<!-- 
+ 						rm.requester_id = #{requester_id} 	
+						OR
+						rm.request_id IN 	
+						( SELECT request_id FROM reference_user_tbl 
+							WHERE 
+								user_id = #{requester_id}
+						)
+						 -->
+						<choose>
+							<when test="'dept'.equals( member_id )">
+								rm.requester_id IN
+								  ( SELECT u.user_id 
+								  	FROM user_tbl u
+									WHERE 1=1 AND u.dept_cd = #{dept_cd} )
+								OR
+								rm.request_id IN 	
+									( SELECT request_id FROM reference_user_tbl 
+										WHERE 
+											user_id = #{requester_id}
+									)
+							</when>
+							<otherwise>
+								<if test="value1 == null or ''.equals(value1) ">
+									rm.requester_id = #{member_id}
+									<if test="requester_id.equals( member_id )">
+										OR
+										rm.request_id IN 	
+											( SELECT request_id FROM reference_user_tbl 
+												WHERE 
+													user_id = #{requester_id}
+											)
+									</if>
+								</if>
+								<if test="value1 == 'request_list' or 'request_list'.equals(value1) ">
+									rm.requester_id = #{member_id}
+								</if>
+								<if test="value1 == 'reference_list' or 'reference_list'.equals(value1) ">
+									<if test="requester_id.equals( member_id )">
+										rm.request_id IN 	
+											( SELECT request_id FROM reference_user_tbl 
+												WHERE 
+													user_id = #{requester_id}
+											)
+									</if>
+								</if>
+							</otherwise>
+						</choose>
+						
+					)
+			</if>
+			
+			<if test="priority_code != null and !''.equals(priority_code)">
+				AND rm.priority_code = #{priority_code}
+			</if>
+			<if test="system_info_code != null and !''.equals(system_info_code)">
+				AND rm.system_info_code = #{system_info_code}
+			</if>
+			<if test="request_type != null and !''.equals(request_type)">
+				AND rm.request_type = #{request_type}
+			</if>
+			
+			<if test="status != null and !''.equals( status ) ">
+				<choose>
+					<when test="'appr'.equals( status )">
+						AND rm.status IN ('MD1266', 'MD1267', 'MD1268')
+					</when>
+					<otherwise>
+						AND rm.status = #{status}
+					</otherwise>
+				</choose>
+			</if>
+<!-- 			<if test="status != null and !''.equals(status)"> -->
+<!-- 				AND rm.status = #{status} -->
+<!-- 			</if> -->
+
+			<if test="request_date != null and !''.equals( request_date ) ">
+<!-- 				AND rm.request_date BETWEEN left(#{request_date}, 16) AND right(#{request_date}, 16) -->
+				AND LEFT(rm.request_date, 10) 
+				BETWEEN 
+					 LEFT(#{request_date}, 10)
+				AND  RIGHT(#{request_date}, 10)
+			</if>
+			<if test="process_date != null and !''.equals( process_date ) ">
+<!-- 				AND rm.request_date BETWEEN left(#{request_date}, 16) AND right(#{request_date}, 16) -->
+				AND LEFT(( SELECT date_updated 
+				FROM service_processes_tbl sp 
+				WHERE sp.request_id = rm.request_id AND	sp.use_yn = 'Y'
+				AND sp.service_process_seq != 0
+				ORDER BY sp.service_process_seq DESC LIMIT 1 
+			), 10) 
+				BETWEEN 
+					 LEFT(#{process_date}, 10)
+				AND  RIGHT(#{process_date}, 10)
+			</if>
+			
+			<if test="use_yn != null and !''.equals(use_yn) ">
+				AND rm.use_yn = #{use_yn}
+			</if>
+			
+			<if test="hap_search != null and hap_search != ''">
+				AND	 (  rm.title 		LIKE CONCAT('%', #{hap_search}, '%') 
+						OR rm.context 	LIKE CONCAT('%', #{hap_search}, '%')
+						OR rm.requester_nm LIKE CONCAT('%', #{hap_search}, '%') 
+						
+<!-- 						통제분류 -->
+						OR ( SELECT sp.control_gubun
+				FROM service_processes_tbl sp
+				WHERE sp.request_id = rm.request_id AND sp.service_process_seq = 0) LIKE CONCAT('%', #{hap_search}, '%') 
+						
+<!-- 						상태 - 모든 상태 -->
+						OR (SELECT code_nm FROM sy_code_detail WHERE master_code = 'MC1015' AND  detail_code = rm.status) LIKE CONCAT('%', #{hap_search}, '%')
+
+<!-- 				단계  -->
+						OR ( SELECT lt.user_level_type_nm
+				FROM service_processes_tbl sp
+				INNER JOIN level_type_assign_master lt
+				ON lt.admin_level_type_code = sp.admin_level_type_code
+				WHERE sp.request_id = rm.request_id AND sp.service_process_seq = 0) LIKE CONCAT('%', #{hap_search}, '%')
+<!-- 						OR rm.request_type 	LIKE CONCAT('%', #{hap_search}, '%')  -->
+<!-- 						OR rm.requester_nm 	LIKE CONCAT('%', #{hap_search}, '%')  -->
+						
+<!-- 						OR ( SELECT owner_nm  -->
+<!-- 								FROM service_processes_tbl sp3  -->
+<!-- 								WHERE sp3.request_id = rm.request_id AND sp3.use_yn = 'Y' -->
+<!-- 								ORDER BY sp3.service_process_seq DESC LIMIT 1  -->
+<!-- 						    ) LIKE CONCAT('%', #{hap_search}, '%')  -->
+						
+						OR ( SELECT system_info_nm FROM system_info_master
+					  		  WHERE system_info_code = rm.system_info_code ) LIKE CONCAT('%', #{hap_search}, '%')
+					  		  
+				  	 )
+			</if>
+			<if test="user_level_type_code != null and !''.equals( user_level_type_code ) ">
+				AND rm.request_id IN ( SELECT sp2.request_id
+					FROM service_processes_tbl sp2
+					INNER JOIN level_type_assign_master lt
+					ON lt.admin_level_type_code = sp2.admin_level_type_code
+					WHERE sp2.service_process_seq = 0
+					AND lt.user_level_type_code = #{user_level_type_code} )
+			</if>
+<!-- 			ORDER BY rm.date_updated DESC -->
+			ORDER BY rm.request_date DESC, rm.date_created DESC
+	</select>
+	
+	<select id="selectCaseMngSub" parameterType="SYCaseVo" resultType="SYCaseVo">
+		SELECT 
+			rm.request_id, 
+			sp.request_seq, 
+			
+			(SELECT COUNT(*) FROM service_processes_tbl spt
+				WHERE rm.request_id = spt.request_id AND spt.use_yn = 'Y' ) as subCaseLength, 
+				
+			(SELECT spt.service_process_id FROM service_processes_tbl spt
+				WHERE rm.request_id = spt.request_id AND spt.use_yn = 'Y'
+				ORDER BY spt.service_process_seq DESC
+				LIMIT 1
+			) AS subCaseLst, 
+			
+			sp.plan_due_date, 
+			sp.request_due_date, 
+			sp.priority_code, 
+			( 
+				CASE 
+					WHEN sp.priority_code = 'h' THEN 'High'
+					WHEN sp.priority_code = 'm' THEN 'Medium'
+					WHEN sp.priority_code = 'l' THEN 'Low'
+				END
+			) as priority_nm, 
+			(
+				SELECT 
+				COUNT(*)
+				FROM service_processes_tbl
+				WHERE 1=1 AND use_yn = 'Y' 
+				AND request_id = rm.request_id
+				AND status = 'MD1266'
+			) AS 'allApprCount',
+			
+			( SELECT owner_id 
+				FROM service_processes_tbl sp2 
+				WHERE sp2.request_id = rm.request_id AND sp2.use_yn = 'Y'
+				ORDER BY sp2.service_process_seq DESC LIMIT 1 
+			) AS n_owner_id, 
+			( SELECT owner_nm 
+				FROM service_processes_tbl sp2 
+				WHERE sp2.request_id = rm.request_id AND sp2.use_yn = 'Y'
+				ORDER BY sp2.service_process_seq DESC LIMIT 1 
+			) AS n_owner_nm, 
+			
+			rm.request_date, 
+			rm.requester_id, rm.requester_nm, 
+			rm.system_info_code,
+			( SELECT system_info_nm FROM system_info_master
+			  WHERE system_info_code = rm.system_info_code ) AS 'system_info_nm', 
+			  
+			rm.request_type, 
+			( SELECT request_type_nm FROM request_type_master
+			  WHERE request_type_code = rm.request_type ) AS 'request_type_nm', 
+			  
+			rm.request_category, 
+			( SELECT request_category_nm FROM request_category_master
+			  WHERE request_category_code = rm.request_category ) AS 'request_category_nm', 
+			
+			rm.request_category_item,
+			( SELECT request_category_item_nm FROM request_category_item
+			  WHERE request_item_code = rm.request_category_item ) AS 'request_category_item_nm', 
+			
+			sp.service_process_id, sp.service_process_seq,
+			sp.process_date,
+			sp.title, sp.context,
+			sp.status, 
+			(SELECT code_nm FROM sy_code_detail WHERE master_code = 'MC1015' AND  detail_code = sp.status) AS status_nm, 
+			sp.comment,
+			
+			sp.owner_id, sp.owner_nm,
+			
+			sp.partner_id, sp.partner_nm, 
+			
+			sp.admin_level_type_code,
+			( SELECT admin_level_type_nm FROM level_type_assign_master
+			  WHERE admin_level_type_code = sp.admin_level_type_code ) AS 'admin_level_type_nm', 
+			
+			( SELECT user_level_type_code FROM level_type_assign_master
+			  WHERE admin_level_type_code = sp.admin_level_type_code ) AS 'user_level_type_code', 
+			
+			( SELECT user_level_type_nm FROM level_type_assign_master
+			  WHERE admin_level_type_code = sp.admin_level_type_code ) AS 'user_level_type_nm', 
+			
+			sp.processed_type_code, 
+			( SELECT processed_type_nm FROM processed_type_master 
+			  WHERE processed_type_code = sp.processed_type_code ) AS 'processed_type_nm', 
+			
+			sp.control_gubun,  
+			
+			sp.approver_id, sp.approver_nm, 
+			
+			(SELECT spt.approver_id FROM service_processes_tbl spt
+				WHERE rm.request_id = spt.request_id AND spt.use_yn = 'Y' AND spt.status IN ("MD1266") 
+				ORDER BY spt.service_process_seq DESC
+				LIMIT 1
+			) AS n_approver_id, 
+			(SELECT spt.approver_nm FROM service_processes_tbl spt 
+				WHERE rm.request_id = spt.request_id AND spt.use_yn = 'Y' AND spt.status IN ("MD1266") 
+				ORDER BY spt.service_process_seq DESC
+				LIMIT 1
+			) AS n_approver_nm, 
+				
+			sp.use_yn,
+			sp.creator, sp.updater,
+			sp.date_created, sp.date_updated,
+			sp.file_group
+		FROM request_management_tbl rm
+		
+		INNER JOIN service_processes_tbl sp
+		ON rm.request_id = sp.request_id
+		
+		WHERE 
+			sp.service_process_seq != 0
+			<if test="admin_level_type_code != null and !''.equals(admin_level_type_code) ">
+				AND sp.admin_level_type_code = #{admin_level_type_code}
+			</if>
+		  	<if test="request_id != null and !''.equals(request_id) ">
+				AND rm.request_id = #{request_id}
+			</if>
+		
+		<!-- 
+		<if test="hap_search != null and hap_search != ''">
+			AND	 (  sp.title 		LIKE CONCAT('%', #{hap_search}, '%') 
+					OR sp.context 	LIKE CONCAT('%', #{hap_search}, '%') )
+		</if>
+		 -->
+		ORDER BY sp.request_seq ASC
+	</select>
+	
+	<insert id="insertCaseMng" parameterType="SYCaseVo">
+		<selectKey resultType="String" keyProperty="keyData" order="BEFORE">
+			SELECT fn_request_id_key()
+		</selectKey>
+
+		INSERT INTO request_management_tbl
+		(
+			request_id, request_date, requester_id, 
+			requester_nm, system_info_code, 
+			request_type, request_category, request_category_item, 
+			title, context, file_group, 
+			
+			plan_due_date, 
+			request_due_date,
+			priority_code, 
+			
+			status, comment, use_yn, 
+			creator, updater, 
+			date_created, date_updated
+		)
+		VALUES 
+		(
+			#{keyData}<!-- fn_request_id_key() -->, <!-- LEFT(SYSDATE(),10) -->LEFT(SYSDATE(),16), #{requester_id}, 
+			#{requester_nm}, #{system_info_code}, 
+			#{request_type}, #{request_category}, #{request_category_item}, 
+			#{title}, #{context}, #{file_group}, 
+			
+			#{plan_due_date}, 
+			#{request_due_date},
+			#{priority_code}, 
+			
+			#{status}, #{comment}, 'Y', 
+			#{creator}, #{updater},
+			current_timestamp(), current_timestamp()
+		)
+	</insert>
+	
+	<update id="updateCaseMng" parameterType="SYCaseVo">
+		UPDATE request_management_tbl
+		SET	  
+			system_info_code = #{system_info_code}
+			<!-- request_type_code -->
+			, request_type = #{request_type}
+			, request_category = #{request_category}
+			, request_category_item = #{request_category_item}
+			
+			, title = #{title}
+			, context = #{context}
+			, file_group = #{file_group}
+			
+			, plan_due_date = #{plan_due_date}
+			, request_due_date = #{request_due_date}
+			, priority_code = #{priority_code}
+			
+			, date_updated = current_timestamp()
+			, updater = #{updater}
+		WHERE request_id = #{request_id}
+	</update>
+	
+	<insert id="insertCaseMng_new" parameterType="SYCaseVo">
+		INSERT INTO service_processes_tbl
+		(
+			request_id, service_process_id, 
+			service_process_seq, process_date, 
+			title, context, 
+			owner_id, owner_nm, file_group, 
+			
+			plan_due_date, 
+			request_due_date,
+			priority_code,
+			
+			admin_level_type_code, 
+			
+			approver_id, approver_nm, 
+			comment, status, 
+			
+			use_yn, 
+			creator, updater, 
+			date_created, date_updated
+		)
+		VALUES 
+		(
+			#{request_id}, #{service_process_id}, 
+			#{service_process_seq}, LEFT(SYSDATE(),16), 
+			#{title}, #{context}, 
+			#{owner_id}, #{owner_nm}, #{file_group}, 
+			
+			#{plan_due_date}, 
+			#{request_due_date},
+			#{priority_code},
+			
+			#{admin_level_type_code}, 
+			
+			#{approver_id}, #{approver_nm}, 
+			#{comment}, #{status}, 
+			
+			'Y', 
+			#{creator}, #{updater},
+			current_timestamp(), current_timestamp()
+		)
+	</insert>
+	
+	<update id="updateCaseMng_new" parameterType="SYCaseVo">
+		UPDATE service_processes_tbl
+		SET	 title = #{title}
+			, context = #{context}
+			, file_group = #{file_group}
+			
+			, plan_due_date = #{plan_due_date}
+			, request_due_date = #{request_due_date}
+			, priority_code = #{priority_code}
+			
+			, date_updated = current_timestamp()
+			, updater = #{updater}
+		WHERE request_id = #{request_id}
+			AND service_process_id = #{service_process_id}
+	</update>
+	
+	<select id="selectHeader" parameterType="SYCaseVo" resultType="SYCaseVo">
+		SELECT 
+			rm.request_id, 
+			sp.request_seq, 
+			sp.plan_due_date, 
+			sp.request_due_date, 
+			
+			 ( SELECT COUNT(*)  
+				FROM service_processes_tbl sp2 WHERE sp2.use_yn = 'Y'
+				AND sp2.service_process_seq != 0
+				AND sp2.request_id = rm.request_id
+				<if test="hap_search == null or hap_search == ''">
+					AND 1=0
+				</if>
+				<if test="hap_search != null and hap_search != ''">
+					AND 
+						(
+							sp2.title LIKE CONCAT('%', #{hap_search}, '%')
+							OR 
+								REGEXP_REPLACE(sp2.context, <![CDATA['<[^>]+>|&nbsp;']]>, '') LIKE CONCAT('%', #{hap_search}, '%')
+<!-- 								sp2.context LIKE CONCAT('%', #{hap_search}, '%') -->
+							OR 	
+								sp2.owner_nm LIKE CONCAT('%', #{hap_search}, '%') 
+						)
+				</if>
+			 ) AS cmd, 
+			
+			sp.priority_code, 
+			( 
+				CASE 
+					WHEN sp.priority_code = 'h' THEN 'High'
+					WHEN sp.priority_code = 'm' THEN 'Medium'
+					WHEN sp.priority_code = 'l' THEN 'Low'
+				END
+			) as priority_nm, 
+			
+			(
+				SELECT 
+				COUNT(*)
+				FROM service_processes_tbl
+				WHERE 1=1 AND use_yn = 'Y' 
+				AND request_id = rm.request_id
+				AND status = 'MD1266'
+			) AS 'allApprCount',
+			
+			( SELECT owner_id 
+				FROM service_processes_tbl sp2 
+				WHERE sp2.request_id = rm.request_id AND sp2.use_yn = 'Y'
+				AND sp2.service_process_seq != 0
+				ORDER BY sp2.service_process_seq DESC LIMIT 1 
+			) AS n_owner_id, 
+			( SELECT owner_nm 
+				FROM service_processes_tbl sp2 
+				WHERE sp2.request_id = rm.request_id AND sp2.use_yn = 'Y'
+				AND sp2.service_process_seq != 0
+				ORDER BY sp2.service_process_seq DESC LIMIT 1 
+			) AS n_owner_nm, 
+			
+			rm.requester_id, rm.requester_nm, 
+			rm.system_info_code,
+			( SELECT system_info_nm FROM system_info_master
+			  WHERE system_info_code = rm.system_info_code ) AS 'system_info_nm', 
+			  
+			rm.request_type, 
+			( SELECT request_type_nm FROM request_type_master
+			  WHERE request_type_code = rm.request_type ) AS 'request_type_nm', 
+			  
+			rm.request_category, 
+			( SELECT request_category_nm FROM request_category_master
+			  WHERE request_category_code = rm.request_category ) AS 'request_category_nm', 
+			
+			rm.request_category_item,
+			( SELECT request_category_item_nm FROM request_category_item
+			  WHERE request_item_code = rm.request_category_item ) AS 'request_category_item_nm', 
+			
+			sp.service_process_id, sp.service_process_seq,
+			sp.process_date,
+			sp.title, sp.context,
+			sp.status, 
+			(SELECT code_nm FROM sy_code_detail WHERE master_code = 'MC1015' AND  detail_code = sp.status) AS status_nm, 
+			sp.comment,
+			
+			(  SELECT da.user_id AS 'dept_user_id' 
+				FROM dept_apporver_tbl da
+				WHERE da.dept_cd = (SELECT u.dept_cd FROM user_tbl u WHERE u.user_id = sp.owner_id) ) AS dept_owner_id, 
+	
+			sp.owner_id, sp.owner_nm,
+			
+			sp.admin_level_type_code,
+			( SELECT admin_level_type_nm FROM level_type_assign_master
+			  WHERE admin_level_type_code = sp.admin_level_type_code ) AS 'admin_level_type_nm', 
+			 
+			( SELECT user_level_type_nm FROM level_type_assign_master
+			  WHERE admin_level_type_code = sp.admin_level_type_code ) AS 'user_level_type_nm', 
+			
+			sp.processed_type_code, 
+			( SELECT processed_type_nm FROM processed_type_master 
+			  WHERE processed_type_code = sp.processed_type_code ) AS 'processed_type_nm', 
+			
+			sp.control_gubun,  
+			( SELECT control_type_nm FROM control_type_master
+			 WHERE control_type_code = sp.control_gubun ) AS 'control_gubun_nm',
+			sp.control_gubun,
+			 
+			sp.approver_id, sp.approver_nm, 
+			
+			(SELECT spt.approver_id FROM service_processes_tbl spt
+				WHERE rm.request_id = spt.request_id AND spt.use_yn = 'Y' AND spt.status IN ('MD1266') <!--  , "MD1267", "MD1268" -->
+				ORDER BY spt.service_process_seq DESC
+				LIMIT 1
+			) AS n_approver_id, 
+			(SELECT spt.approver_nm FROM service_processes_tbl spt 
+				WHERE rm.request_id = spt.request_id AND spt.use_yn = 'Y' AND spt.status IN ('MD1266') <!--  , "MD1267", "MD1268" -->
+				ORDER BY spt.service_process_seq DESC
+				LIMIT 1
+			) AS n_approver_nm, 
+				
+			(SELECT code_nm FROM sy_code_detail WHERE master_code = 'MC1015' AND  detail_code = (SELECT status FROM service_processes_tbl spt WHERE  spt.use_yn = 'Y' AND spt.request_id = rm.request_id
+				AND spt.service_process_seq = ( SELECT MAX(sptt.service_process_seq) FROM service_processes_tbl sptt
+				WHERE sptt.use_yn = 'Y' AND sptt.request_id = rm.request_id))) AS queue_code,
+			(SELECT status FROM service_processes_tbl spt WHERE  spt.use_yn = 'Y' AND spt.request_id = rm.request_id
+				AND spt.service_process_seq = ( SELECT MAX(sptt.service_process_seq) FROM service_processes_tbl sptt
+				WHERE sptt.use_yn = 'Y' AND sptt.request_id = rm.request_id)) AS queue_nm,
+			sp.use_yn,
+			sp.creator, sp.updater,
+			sp.date_created,
+			<choose>
+				<when test="apprStatus != null and !''.equals( apprStatus ) "> <!-- 엑셀 다운받을 때  조회 조건 -->
+				<!-- 승일 날짜 -->
+					(SELECT date_created FROM approver_history_tbl WHERE request_id = sp.request_id AND 
+					service_process_id = sp.service_process_id AND status = 'MD1267'
+					ORDER BY service_process_id DESC LIMIT 1) AS date_updated, 
+					
+					<!-- 승인 요청일 -->
+					sp.process_date AS request_date, 
+					
+					 <!-- 처리일시 -->
+					sp.date_updated AS value1,
+				</when>
+				<otherwise> <!-- 일반 조회할 때 -->
+					sp.date_updated,
+					
+					<!-- 			처리일  -->
+					( SELECT date_updated
+						FROM service_processes_tbl sp2 
+						WHERE sp2.request_id = rm.request_id AND sp2.use_yn = 'Y'
+						AND sp2.service_process_seq != 0
+						ORDER BY sp2.service_process_seq DESC LIMIT 1 
+					) AS value1,
+					
+					rm.request_date, 
+					
+				</otherwise>
+			</choose>
+			
+			sp.file_group
+<!-- 			, f.file_path, f.file_name, f.file_no	 -->
+			
+		FROM request_management_tbl rm
+		
+		INNER JOIN service_processes_tbl sp
+		ON rm.request_id = sp.request_id
+		
+<!-- 		LEFT OUTER JOIN sy_file_info f -->
+<!-- 		ON sp.file_group = f.file_group -->
+		
+		WHERE rm.use_yn = 'Y'
+		AND sp.use_yn = 'Y'
+		<if test="apprStatus == null or ''.equals( apprStatus ) "> <!-- apprStatus = 엑셀 다운받을 때 헤더들과 자식들을 조회하기 위한 조건 -->
+			AND sp.service_process_seq = 0
+		</if>
+		
+		<if test="system_info_codes != null and !''.equals(system_info_codes) ">
+			AND 
+			(
+				rm.system_info_code IN 
+				(
+					SELECT system_info_code
+					FROM system_queue_master sq
+					INNER JOIN queue_user_tbl qu ON sq.queue_code = qu.queue_code
+					INNER JOIN user_tbl u ON qu.user_no = u.user_no
+					WHERE u.user_id = #{system_info_codes} AND u.use_yn = 'Y' AND sq.use_yn = 'Y'
+					GROUP BY sq.system_info_code
+				)
+				<!-- OR 서브case들에서 참조자 ID가 들어간 메인case -->
+				OR rm.request_id 
+				IN (SELECT request_id
+				FROM partner_user_tbl ptu
+				WHERE partner_id = #{member_id})
+			)
+		</if>
+		<if test="value2 != null and !''.equals(value2) ">
+<!-- 		<if test="'N'.equals(value1)"> -->
+			AND LEFT(sp.process_date, 10) 
+				BETWEEN 
+					 LEFT(date_add(now(), interval -1 year),10)
+				AND  LEFT(now() ,10)
+		</if>
+		<if test="apprStatus != null and !''.equals( apprStatus ) ">
+			AND rm.request_id IN (${apprStatus}) <!-- 엑셀 다운받을 때 자식들 데이터를 다 가져오기 위해 request_id를 'REQ_00179','REQ_00176' 이런 식으로 가져와서 ${apprStatus} 이런식으로 뿌려줌-->
+		</if>
+		<if test="request_id != null and !''.equals(request_id) ">
+			AND rm.request_id = #{request_id}
+		</if>
+		<if test="control_gubun != null and !''.equals(control_gubun) ">
+			AND sp.control_gubun = #{control_gubun}
+		</if>
+		
+		<if test="admin_level_type_code != null and !''.equals(admin_level_type_code) ">
+			<choose>
+				<when test="'Hold'.equals(admin_level_type_code)">
+					AND sp.status = 'MD1257'
+				</when>
+				<otherwise>
+					<if test="'alt_02'.equals(admin_level_type_code) ">
+						AND sp.admin_level_type_code IN ('alt_02', 'alt_07')
+					</if>
+					<if test="!'alt_02'.equals(admin_level_type_code) ">
+						AND sp.admin_level_type_code = #{admin_level_type_code}
+					</if>
+				</otherwise>
+			</choose>
+		</if>
+		<if test="service_process_id != null and !''.equals(service_process_id) ">
+			AND sp.service_process_id = #{service_process_id}
+		</if>
+		
+		<choose>
+			<when test="owner_id != null and !''.equals(owner_id)">
+				AND sp.owner_id = #{owner_id}
+			</when>
+			<otherwise>
+				<!-- 
+					, qu.queue_code, 
+					qu.user_no, u.user_nm, u.use_yn
+				 -->
+				 <!-- Owner 조건 아닐때는 다 보여야함. hidden -->
+				<!-- 
+				AND sp.owner_id IN 
+				(
+					SELECT 
+						qu.user_id
+						
+					FROM queue_user_tbl qu
+					INNER JOIN user_tbl u ON qu.user_no = u.user_no
+					WHERE u.use_yn = 'Y' 
+					AND 
+						qu.queue_code IN 
+							( SELECT queue_code FROM queue_user_tbl WHERE user_id  = #{member_id} )
+				)
+				 -->
+			</otherwise>
+		</choose>
+		
+		<choose>
+<!-- 			<when test="dateCode != null and !''.equals(dateCode)"> -->
+			<when test="'rq'.equals( dateCode )">
+				AND sp.status <![CDATA[ <> ]]> 'MD1258'
+				AND DATE(sp.request_due_date) <![CDATA[ < ]]> CURDATE()
+				<!-- SUBDATE(CURDATE(), DATE_FORMAT(CURDATE(),'%w')-1) -->
+			</when>
+			<when test="'pl'.equals( dateCode )">
+				AND sp.status <![CDATA[ <> ]]> 'MD1258'
+				AND DATE(sp.plan_due_date) <![CDATA[ < ]]> CURDATE()
+			</when>
+			<otherwise>
+				
+			</otherwise>
+		</choose>
+		
+		<if test="hap_search != null and hap_search != ''">
+			AND	 (  sp.title 			LIKE CONCAT('%', #{hap_search}, '%') 
+					<!-- OR rm.request_type 	LIKE CONCAT('%', #{hap_search}, '%') 
+					OR sp.owner_nm 		LIKE CONCAT('%', #{hap_search}, '%') 
+					OR sp.process_date 	LIKE CONCAT('%', #{hap_search}, '%') 
+					OR sp.request_seq 	LIKE CONCAT('%', #{hap_search}, '%')  -->
+					OR REGEXP_REPLACE(sp.context, <![CDATA['<[^>]+>|&nbsp;']]>, '') LIKE CONCAT('%', #{hap_search}, '%')
+<!-- 					OR sp.context 		LIKE CONCAT('%', #{hap_search}, '%')  -->
+					OR sp.owner_nm 		LIKE CONCAT('%', #{hap_search}, '%') 
+					OR sp.request_seq 	LIKE CONCAT('%', #{hap_search}, '%') 
+					
+					OR rm.request_id IN 
+						( SELECT DISTINCT(sp2.request_id)  
+							FROM service_processes_tbl sp2 WHERE sp2.use_yn = 'Y'
+							AND 
+								(
+<!-- 									sp2.context LIKE CONCAT('%', #{hap_search}, '%') -->
+									REGEXP_REPLACE(sp2.context, <![CDATA['<[^>]+>|&nbsp;']]>, '') LIKE CONCAT('%', #{hap_search}, '%')
+									OR
+									sp2.title LIKE CONCAT('%', #{hap_search}, '%')	
+								)
+						)
+					
+<!-- 					OR rm.request_id IN  -->
+<!-- 						( SELECT DISTINCT(sp2.request_id)   -->
+<!-- 							FROM service_processes_tbl sp2 WHERE sp2.use_yn = 'Y' -->
+<!-- 							AND sp2.title LIKE CONCAT('%', #{hap_search}, '%') -->
+<!-- 						) -->
+					
+					<!-- OR ( SELECT distinct(owner_nm) 
+							FROM service_processes_tbl sp3 
+							WHERE sp3.request_id = rm.request_id AND sp3.use_yn = 'Y'
+							ORDER BY sp3.service_process_seq  
+					    ) LIKE CONCAT('%', #{hap_search}, '%')  -->
+					
+					OR ( SELECT system_info_nm FROM system_info_master
+				  		  WHERE system_info_code = rm.system_info_code ) LIKE CONCAT('%', #{hap_search}, '%')
+						
+<!-- 						상태 - 모든 상태 -->
+						OR (SELECT code_nm FROM sy_code_detail WHERE master_code = 'MC1015' AND  detail_code = rm.status) LIKE CONCAT('%', #{hap_search}, '%')
+<!-- 						통제분류 -->
+						OR sp.control_gubun LIKE CONCAT('%', #{hap_search}, '%')
+
+<!-- 				단계  -->
+						OR ( SELECT admin_level_type_nm FROM level_type_assign_master
+			  WHERE admin_level_type_code = sp.admin_level_type_code ) LIKE CONCAT('%', #{hap_search}, '%')
+				
+			  	 )
+		</if>
+		
+		<if test="n_owner_id != null and !''.equals( n_owner_id ) ">
+			AND 
+			(
+				( SELECT owner_id 
+						FROM service_processes_tbl sp2 
+						WHERE sp2.request_id = rm.request_id AND sp2.use_yn = 'Y'
+						ORDER BY sp2.service_process_seq DESC LIMIT 1 
+					) = #{n_owner_id}
+				OR
+				( SELECT owner_id 
+					FROM service_processes_tbl sp2 
+					WHERE sp2.request_id = rm.request_id AND sp2.use_yn = 'Y'
+					AND sp2.service_process_seq != 0
+					ORDER BY sp2.service_process_seq DESC LIMIT 1 
+				) IS NULL
+				<!-- rm.request_id IN 
+				( SELECT sp3.request_id FROM service_processes_tbl sp3
+					WHERE sp3.service_process_seq = 0 
+					AND sp3.use_yn = 'Y'
+					AND sp3.processed_type_code IS NULL
+				) -->
+				<!-- OR 서브case들에서 참조자 ID가 들어간 메인case -->
+				<if test="member_id.equals( n_owner_id )">
+					OR rm.request_id IN 
+						(SELECT request_id
+						FROM partner_user_tbl ptu
+						WHERE partner_id = #{member_id})
+				</if>
+			)
+		</if>
+		<if test="n_owner_nm != null and !''.equals( n_owner_nm ) ">
+			AND ( SELECT owner_nm 
+					FROM service_processes_tbl sp2 
+					WHERE sp2.request_id = rm.request_id AND sp2.use_yn = 'Y'
+					ORDER BY sp2.service_process_seq DESC LIMIT 1 
+				) LIKE concat('%', #{n_owner_nm}, '%')
+		</if>
+		
+		<if test="request_seq != null and !''.equals(request_seq)">
+			AND sp.request_seq = #{request_seq}
+		</if>
+		
+		<if test="system_info_code != null and !''.equals(system_info_code)">
+			AND rm.system_info_code = #{system_info_code}
+		</if>
+		<if test="request_type != null and !''.equals(request_type)">
+			AND rm.request_type = #{request_type}
+		</if>
+		<if test="priority_code != null and !''.equals(priority_code)">
+			AND sp.priority_code = #{priority_code}
+		</if>
+		<if test="status != null and !''.equals(status)">
+<!-- 			AND sp.status = #{status} 미션중-->
+			<choose>
+				<when test="'header'.equals(value3)">
+					AND sp.status = #{status}
+				</when>
+				<otherwise>
+					AND (SELECT status FROM service_processes_tbl spt WHERE  spt.use_yn = 'Y' AND spt.request_id = rm.request_id
+					AND spt.service_process_seq = ( SELECT MAX(sptt.service_process_seq) FROM service_processes_tbl sptt
+					WHERE sptt.use_yn = 'Y' AND sptt.request_id = rm.request_id)) = #{status}
+				</otherwise>
+			</choose>
+		</if>
+		<if test="process_date != null and !''.equals( process_date ) ">
+<!-- 			AND sp.process_date BETWEEN LEFT(#{process_date}, 16) AND RIGHT(#{process_date}, 16) -->
+<!-- 			AND sp.process_date BETWEEN LEFT(#{process_date}, 10) AND RIGHT(#{process_date}, 10) -->
+				AND LEFT(sp.process_date, 10) 
+				BETWEEN 
+					 LEFT(#{process_date}, 10)
+				AND  RIGHT(#{process_date}, 10)
+		</if>
+		<if test="date_updated != null and !''.equals( date_updated ) ">
+<!-- 			AND sp.process_date BETWEEN LEFT(#{process_date}, 16) AND RIGHT(#{process_date}, 16) -->
+<!-- 			AND sp.process_date BETWEEN LEFT(#{process_date}, 10) AND RIGHT(#{process_date}, 10) -->
+				AND LEFT(( SELECT date_updated
+				FROM service_processes_tbl sp2 
+				WHERE sp2.request_id = rm.request_id AND sp2.use_yn = 'Y'
+				AND sp2.service_process_seq != 0
+				ORDER BY sp2.service_process_seq DESC LIMIT 1 
+			), 10) 
+				BETWEEN 
+					 LEFT(#{date_updated}, 10)
+				AND  RIGHT(#{date_updated}, 10)
+		</if>
+		
+		<!-- 승인 처리한 값만 보이기 -->
+		<if test="approver_id != null and !''.equals(approver_id) ">
+			AND ( 
+					SELECT spt.approver_id FROM service_processes_tbl spt
+					WHERE rm.request_id = spt.request_id AND spt.use_yn = 'Y' AND spt.status IN ("MD1266")
+					ORDER BY spt.service_process_seq DESC
+					LIMIT 1 
+				) =  #{approver_id}
+		</if>
+		
+		ORDER BY 
+		<if test="n_owner_id != null and !''.equals( n_owner_id ) ">
+			FIELD( (SELECT owner_id FROM service_processes_tbl sp2
+				WHERE sp2.request_id = rm.request_id AND sp2.use_yn = 'Y' AND sp2.service_process_seq != 0
+				ORDER BY sp2.service_process_seq DESC
+				LIMIT 1), #{n_owner_id}
+			) DESC, 
+		</if>
+		<choose>
+			<when test="apprStatus != null and !''.equals( apprStatus ) ">
+				sp.request_id DESC
+			</when>
+			<otherwise>
+				sp.process_date DESC, sp.request_seq DESC <!-- 원본 -->
+			</otherwise>
+		</choose>
+	</select>
+	
+	<select id="selectSub" parameterType="SYCaseVo" resultType="SYCaseVo">
+		SELECT 
+			rm.request_id, 
+			sp.request_seq, 
+			
+			(SELECT COUNT(*) FROM service_processes_tbl spt
+				WHERE rm.request_id = spt.request_id AND spt.use_yn = 'Y' ) as subCaseLength, 
+				
+			(SELECT spt.service_process_id FROM service_processes_tbl spt
+				WHERE rm.request_id = spt.request_id AND spt.use_yn = 'Y'
+				ORDER BY spt.service_process_seq DESC
+				LIMIT 1
+			) AS subCaseLst, 
+			
+			sp.plan_due_date, 
+			sp.request_due_date, 
+			sp.priority_code, 
+			( 
+				CASE 
+					WHEN sp.priority_code = 'h' THEN 'High'
+					WHEN sp.priority_code = 'm' THEN 'Medium'
+					WHEN sp.priority_code = 'l' THEN 'Low'
+				END
+			) as priority_nm, 
+			(
+				SELECT 
+				COUNT(*)
+				FROM service_processes_tbl
+				WHERE 1=1 AND use_yn = 'Y' 
+				AND request_id = rm.request_id
+				AND status = 'MD1266'
+			) AS 'allApprCount',
+			
+			( SELECT owner_id 
+				FROM service_processes_tbl sp2 
+				WHERE sp2.request_id = rm.request_id AND sp2.use_yn = 'Y'
+				ORDER BY sp2.service_process_seq DESC LIMIT 1 
+			) AS n_owner_id, 
+			( SELECT owner_nm 
+				FROM service_processes_tbl sp2 
+				WHERE sp2.request_id = rm.request_id AND sp2.use_yn = 'Y'
+				ORDER BY sp2.service_process_seq DESC LIMIT 1 
+			) AS n_owner_nm, 
+			
+			rm.request_date, 
+			rm.requester_id, rm.requester_nm, 
+			rm.system_info_code,
+			( SELECT system_info_nm FROM system_info_master
+			  WHERE system_info_code = rm.system_info_code ) AS 'system_info_nm', 
+			  
+			rm.request_type, 
+			( SELECT request_type_nm FROM request_type_master
+			  WHERE request_type_code = rm.request_type ) AS 'request_type_nm', 
+			  
+			rm.request_category, 
+			( SELECT request_category_nm FROM request_category_master
+			  WHERE request_category_code = rm.request_category ) AS 'request_category_nm', 
+			
+			rm.request_category_item,
+			( SELECT request_category_item_nm FROM request_category_item
+			  WHERE request_item_code = rm.request_category_item ) AS 'request_category_item_nm', 
+			
+			sp.service_process_id, sp.service_process_seq,
+			sp.process_date,
+			sp.title, sp.context,
+			sp.status, 
+			(SELECT code_nm FROM sy_code_detail WHERE master_code = 'MC1015' AND  detail_code = sp.status) AS status_nm, 
+			sp.comment,
+			
+			(  SELECT da.user_id AS 'dept_user_id' 
+				FROM dept_apporver_tbl da
+				WHERE da.dept_cd = (SELECT u.dept_cd FROM user_tbl u WHERE u.user_id = sp.owner_id) ) AS dept_owner_id, 
+			
+			sp.owner_id, sp.owner_nm,
+			
+			sp.partner_id, sp.partner_nm, 
+			
+			sp.admin_level_type_code,
+			( SELECT admin_level_type_nm FROM level_type_assign_master
+			  WHERE admin_level_type_code = sp.admin_level_type_code ) AS 'admin_level_type_nm', 
+			 
+			( SELECT user_level_type_nm FROM level_type_assign_master
+			  WHERE admin_level_type_code = sp.admin_level_type_code ) AS 'user_level_type_nm', 
+			
+			sp.processed_type_code, 
+			( SELECT processed_type_nm FROM processed_type_master 
+			  WHERE processed_type_code = sp.processed_type_code ) AS 'processed_type_nm', 
+			 
+			sp.control_gubun, 
+			  
+			sp.approver_id, sp.approver_nm, 
+			
+			(SELECT spt.approver_id FROM service_processes_tbl spt
+				WHERE rm.request_id = spt.request_id AND spt.use_yn = 'Y' AND spt.status IN ("MD1266") <!--  , "MD1267", "MD1268" -->
+				ORDER BY spt.service_process_seq DESC
+				LIMIT 1
+			) AS n_approver_id, 
+			(SELECT spt.approver_nm FROM service_processes_tbl spt 
+				WHERE rm.request_id = spt.request_id AND spt.use_yn = 'Y' AND spt.status IN ("MD1266") <!--  , "MD1267", "MD1268" -->
+				ORDER BY spt.service_process_seq DESC
+				LIMIT 1
+			) AS n_approver_nm, 
+				
+			sp.use_yn,
+			sp.creator, sp.updater,
+			sp.date_created, sp.date_updated,
+			sp.file_group
+		FROM request_management_tbl rm
+		
+		INNER JOIN service_processes_tbl sp
+		ON rm.request_id = sp.request_id
+		
+		WHERE rm.use_yn = 'Y'
+		AND sp.use_yn = 'Y'
+		AND sp.service_process_seq != 0
+		<if test="request_id != null and !''.equals(request_id) ">
+			AND rm.request_id = #{request_id}
+		</if>
+		
+		<if test="hap_search != null and hap_search != ''">
+			AND	 (  sp.title 		LIKE CONCAT('%', #{hap_search}, '%') 
+					OR sp.context 	LIKE CONCAT('%', #{hap_search}, '%') )
+		</if>
+		
+		<if test="system_info_codes != null and !''.equals(system_info_codes) ">
+			AND 
+			(
+				rm.system_info_code IN 
+				(
+					SELECT system_info_code
+					FROM system_queue_master sq
+					INNER JOIN queue_user_tbl qu ON sq.queue_code = qu.queue_code
+					INNER JOIN user_tbl u ON qu.user_no = u.user_no
+					WHERE u.user_id = #{system_info_codes} AND u.use_yn = 'Y' AND sq.use_yn = 'Y'
+					GROUP BY sq.system_info_code
+				)
+				<if test="member_id != null and !''.equals( member_id ) ">
+					<!-- OR 참조자 ID가 들어간 서브case -->
+					OR ( 
+						sp.service_process_id 
+						IN (SELECT service_process_id
+						FROM partner_user_tbl ptu
+						WHERE partner_id = #{member_id})
+						OR sp.partner_id = #{member_id}
+					)
+				</if>
+			)
+		</if>
+		
+		ORDER BY sp.request_seq ASC
+	</select>
+	
+	<insert id="insertPartnerCase" parameterType="SYCaseVo">
+		<selectKey resultType="String" keyProperty="keyData" order="BEFORE">
+			SELECT IFNULL((SELECT MAX(service_process_seq)+1 
+			FROM service_processes_tbl sp 
+			WHERE sp.request_id = #{request_id}), 1)
+		</selectKey>
+		INSERT INTO service_processes_tbl
+		(
+			request_id, service_process_id, 
+			service_process_seq, process_date, 
+			title, context, 
+			status, 
+			owner_id, owner_nm, 
+			
+			admin_level_type_code, 
+			processed_type_code, 
+			control_gubun,  
+			
+			approver_id, approver_nm, 
+			comment, 
+			partner_id, partner_nm, 
+			
+			file_group, 
+			
+			plan_due_date, 
+			request_due_date, 
+			priority_code, 
+			
+			use_yn, 
+			creator, updater, 
+			date_created, date_updated
+		)
+		VALUES 
+		(
+			#{request_id}, CONCAT( 'SER_', LPAD( #{keyData}, 2, '0' ) ), 
+			#{keyData}, 
+			LEFT(SYSDATE(),16), 
+			#{title}, #{context}, 
+			#{status}, 
+			#{owner_id}, #{owner_nm},
+			
+			#{admin_level_type_code}, 
+			#{processed_type_code},
+			#{control_gubun},
+			
+<!-- 			#{approver_id}, #{approver_nm}, #{comment},  -->
+			'', '', '', 
+			#{partner_id}, #{partner_nm}, 
+			#{file_group}, 
+			
+			#{plan_due_date}, 
+			#{request_due_date}, 
+			#{priority_code}, 
+			
+			'Y', 
+			#{creator}, #{updater},
+			current_timestamp(), current_timestamp()
+		)
+	</insert>
+	
+	<update id="updatePartnerCase" parameterType="SYCaseVo">
+		UPDATE service_processes_tbl
+		SET	 context = #{context}
+ 			, file_group = #{file_group}
+			<if test="owner_id != null and !''.equals(owner_id) ">
+				, owner_id = #{owner_id}
+				, owner_nm = #{owner_nm}
+			</if>
+<!-- 			, status = #{status} -->
+			, date_updated = current_timestamp()
+			, updater = #{updater}
+		WHERE request_id = #{request_id}
+		AND service_process_id = #{service_process_id}
+	</update>
+	
+	<!-- 쿼리 하자 -->
+	<insert id="insertCase" parameterType="SYCaseVo">
+		<selectKey resultType="String" keyProperty="keyData" order="BEFORE">
+			SELECT IFNULL((SELECT MAX(service_process_seq)+1 
+			FROM service_processes_tbl sp 
+			WHERE sp.request_id = #{request_id}), 1)
+		</selectKey>
+		INSERT INTO service_processes_tbl
+		(
+			request_id, service_process_id, 
+			service_process_seq, process_date, 
+			title, context, 
+			status, comment, 
+			owner_id, owner_nm, 
+			
+			admin_level_type_code, 
+			processed_type_code, 
+			control_gubun, 
+			approver_id, approver_nm, 
+			file_group, 
+			
+			plan_due_date, 
+			request_due_date, 
+			priority_code, 
+			
+			use_yn, 
+			creator, updater, 
+			date_created, date_updated
+		)
+		VALUES 
+		(
+			#{request_id}, CONCAT( 'SER_', LPAD( #{keyData}, 2, '0' ) ), 
+			#{keyData}, 
+			LEFT(SYSDATE(),16), 
+			#{title}, #{context}, 
+			#{status}, #{comment}, 
+			#{owner_id}, #{owner_nm},
+			
+			#{admin_level_type_code}, 
+			#{processed_type_code},
+			#{control_gubun},
+			#{approver_id}, #{approver_nm},
+			#{file_group}, 
+			
+			#{plan_due_date}, 
+			#{request_due_date}, 
+			#{priority_code}, 
+			
+			'Y', 
+			#{creator}, #{updater},
+			current_timestamp(), current_timestamp()
+		)
+	</insert>
+	<!-- 쿼리 하자 -->
+	<update id="updateCase" parameterType="SYCaseVo">
+		UPDATE service_processes_tbl
+		SET	 title = #{title}
+			, context = #{context}
+			, processed_type_code = #{processed_type_code}
+			, control_gubun = #{control_gubun}
+ 			, file_group = #{file_group}
+ 			<if test="priority_code != null and !''.equals(priority_code) ">
+ 				, priority_code = #{priority_code}
+ 			</if>
+ 			<if test="approver_id != null and !''.equals(approver_id) ">
+ 				<choose>
+					<when test="'MD1266'.equals(status)">
+						, approver_id = #{approver_id}
+						, approver_nm = #{approver_nm}
+						, comment 	= #{comment}
+					</when>
+				</choose>
+			</if>
+			<if test="owner_id != null and !''.equals(owner_id) ">
+				, owner_id = #{owner_id}
+				, owner_nm = #{owner_nm}
+			</if>
+			, status = #{status}
+			, date_updated = current_timestamp()
+			, updater = #{updater}
+		WHERE request_id = #{request_id}
+		AND service_process_id = #{service_process_id}
+	</update>
+	
+	<update id="apprCancelCase" parameterType="SYCaseVo">
+		UPDATE service_processes_tbl
+		SET	 
+			date_updated = current_timestamp()
+			, updater = #{updater}
+ 			<if test="status != null and !''.equals( status ) ">
+ 				, status = #{status}
+			</if>
+			
+			<choose>
+				<when test="'cancelAppr'.equals( keyData )">
+					, approver_id = #{approver_id}
+					, approver_nm = #{approver_nm}
+					, comment 	= #{comment}
+				</when>
+				<otherwise>
+					<if test="approver_id != null and !''.equals( approver_id ) ">
+		 				, approver_id = #{approver_id}
+					</if>
+		 			<if test="approver_nm != null and !''.equals( approver_nm ) ">
+		 				, approver_nm = #{approver_nm}
+					</if>
+		 			<if test="comment != null and !''.equals( comment ) ">
+		 				, comment 	= #{comment}
+					</if>
+				</otherwise>
+			</choose>
+ 			
+			<if test="owner_id != null and !''.equals(owner_id) ">
+				, owner_id = #{owner_id}
+				, owner_nm = #{owner_nm}
+			</if>
+			
+		WHERE request_id = #{request_id}
+		AND service_process_id = #{service_process_id}
+	</update>
+	
+	<update id="updateApprCase" parameterType="SYCaseVo">
+		UPDATE service_processes_tbl
+		SET	 
+			  status = #{status}
+			, updater = #{updater}
+			, date_updated = current_timestamp()
+		WHERE request_id = #{request_id}
+		AND service_process_id = #{service_process_id}
+	</update>
+	
+	<!--  0번째 work status 또는 상태 변경 -->
+	<update id="updateCase_status" parameterType="SYCaseVo">
+		UPDATE service_processes_tbl
+		SET	 
+			status = #{status}
+		<if test="admin_level_type_code != null and !''.equals(admin_level_type_code) ">
+			, admin_level_type_code = #{admin_level_type_code}
+		</if>
+		<choose>
+			<when test="'MD1269'.equals( status )">
+				, approver_id = #{approver_id}
+				, approver_nm = #{approver_nm}
+				, comment = #{comment}
+			</when>
+			<when test="'MD1266'.equals( status )">
+				, approver_id = #{approver_id}
+				, approver_nm = #{approver_nm}
+				, comment = #{comment}
+			</when>
+		</choose>
+			, date_updated = current_timestamp()
+			, updater = #{updater}
+		WHERE request_id = #{request_id}
+			AND service_process_id = #{service_process_id}
+	</update>
+	
+	<!-- 헤더와 모든 제목 plan_due_date 변경 + 서브 processed_type_code 변경 -->
+	<update id="updateRequestMng_case" parameterType="SYCaseVo">
+		UPDATE request_management_tbl
+		SET
+			title = #{title}
+			, plan_due_date = #{plan_due_date}
+			
+			<if test="system_info_code != null and !''.equals( system_info_code ) ">
+				, system_info_code = #{system_info_code}
+			</if>
+			<if test="priority_code != null and !''.equals(priority_code)">
+				, priority_code = #{priority_code}
+			</if>
+			<if test="request_type != null and !''.equals( request_type ) ">
+				, request_type = #{request_type}
+			</if>
+			<if test="request_category != null and !''.equals( request_category ) ">
+				, request_category = #{request_category}
+			</if>
+			<if test="request_category_item != null and !''.equals( request_category_item ) ">
+				, request_category_item = #{request_category_item}
+			</if>
+			
+			, updater = #{updater}
+			, date_updated = current_timestamp()
+		WHERE request_id = #{request_id}
+	</update>
+	
+	<update id="updateCase_case" parameterType="SYCaseVo">
+		UPDATE service_processes_tbl
+		SET
+			date_updated = current_timestamp()
+			, updater = #{updater}
+		<if test="title != null and !''.equals(title) ">
+			, title = #{title}
+		</if>
+		<if test="priority_code != null and !''.equals(priority_code)">
+			, priority_code = #{priority_code}
+		</if>
+		<if test="processed_type_code != null and !''.equals(processed_type_code) ">
+			, processed_type_code = #{processed_type_code}
+		</if>
+		<if test="control_gubun != null and !''.equals(control_gubun) ">
+			, control_gubun = #{control_gubun}
+		</if>
+		<if test="plan_due_date != null and !''.equals(plan_due_date) ">
+			, plan_due_date = #{plan_due_date}
+		</if>	
+		WHERE request_id = #{request_id}
+		 AND service_process_id IN ('SER_00', #{service_process_id})
+	</update>
+	
+	<update id="updateRequestMng_status" parameterType="SYCaseVo">
+		UPDATE request_management_tbl
+		SET	 
+			status = #{status}
+		<choose>
+			<when test="'MD1269'.equals( status )">
+				, comment = #{comment}
+			</when>
+			<when test="'MD1266'.equals( status )">
+				, comment = #{comment}
+			</when>
+			<when test="'comment'.equals( keyData )">
+				, comment = #{comment}
+			</when>
+		</choose>
+			, date_updated = current_timestamp()
+			, updater = #{updater}
+		WHERE request_id = #{request_id}
+	</update>
+	
+	<insert id="insertApprover_history" parameterType="SYCaseVo">
+		<selectKey resultType="String" keyProperty="keyData" order="BEFORE">
+			SELECT IFNULL((SELECT MAX(service_process_seq)+1 
+			FROM approver_history_tbl ah 
+			WHERE ah.request_id = #{request_id} AND ah.service_process_id = #{service_process_id} ), 1)
+		</selectKey>
+		INSERT INTO approver_history_tbl
+		(
+			request_id, service_process_id, 
+			service_process_seq, 
+			status, comment, 
+			requester_id, requester_nm, 
+			approver_id, approver_nm, 
+			use_yn, 
+			creator, updater, 
+			date_created, date_updated
+		)
+		VALUES 
+		(
+			#{request_id}, #{service_process_id}, 
+			#{keyData}, 
+			#{status}, #{comment}, 
+			
+			#{requester_id}, #{requester_nm},
+			#{approver_id}, #{approver_nm},
+			'Y', 
+			#{creator}, #{updater},
+			current_timestamp(), current_timestamp()
+		)
+	</insert>
+	
+	<delete id="deleteApprover_history" parameterType="SYCaseVo" >
+		DELETE FROM
+			approver_history_tbl
+		WHERE 
+			request_id = #{request_id}
+			AND service_process_id = #{service_process_id}
+			AND service_process_seq = #{service_process_seq}
+	</delete>
+	
+	<insert id="insertCollaboration_history" parameterType="SYCaseVo">
+		<selectKey resultType="String" keyProperty="keyData" order="BEFORE">
+			SELECT IFNULL((SELECT MAX(collaboration_history_seq)+1 
+			FROM collaboration_history_tbl ch 
+			WHERE ch.request_id = #{request_id} AND ch.service_process_id = #{service_process_id} ), 1)
+		</selectKey>
+		INSERT INTO collaboration_history_tbl
+		(
+			request_id, service_process_id, 
+			collaboration_history_seq, 
+			status, comment, 
+			requester_id, requester_nm, 
+			approver_id, approver_nm, 
+			use_yn, 
+			creator, updater, 
+			date_created, date_updated
+		)
+		VALUES 
+		(
+			#{request_id}, #{service_process_id}, 
+			#{keyData}, 
+			#{status}, #{comment}, 
+			
+			#{requester_id}, #{requester_nm},
+			#{approver_id}, #{approver_nm},
+			'Y', 
+			#{creator}, #{updater},
+			current_timestamp(), current_timestamp()
+		)
+	</insert>
+	
+	<update id="deleteCaseMng" parameterType="SYCaseVo">
+		UPDATE request_management_tbl
+		SET	 
+			use_yn = #{use_yn}
+			, date_updated = current_timestamp()
+			, updater = #{updater}
+		WHERE request_id = #{request_id}
+	</update>
+	
+	<update id="deleteCase" parameterType="SYCaseVo">
+		UPDATE service_processes_tbl
+		SET	 
+			use_yn = #{use_yn}
+			, date_updated = current_timestamp()
+			, updater = #{updater}
+		WHERE request_id = #{request_id}
+			AND service_process_id = #{service_process_id}
+	</update>
+	
+	<select id="selectDetail" parameterType="SYCaseVo" resultType="SYCaseVo">
+		SELECT 
+			rm.request_id, 
+			sp.request_seq, 
+			sp.plan_due_date, 
+			sp.request_due_date, 
+			sp.priority_code, 
+			( 
+				CASE 
+					WHEN sp.priority_code = 'h' THEN 'High'
+					WHEN sp.priority_code = 'm' THEN 'Medium'
+					WHEN sp.priority_code = 'l' THEN 'Low'
+				END
+			) as priority_nm, 
+			(
+				SELECT 
+				COUNT(*)
+				FROM service_processes_tbl
+				WHERE 1=1 AND use_yn = 'Y' 
+				AND request_id = rm.request_id
+				AND status = 'MD1266'
+			) AS 'allApprCount',
+			
+			( SELECT owner_id 
+				FROM service_processes_tbl sp2 
+				WHERE sp2.request_id = rm.request_id AND sp2.use_yn = 'Y'
+				ORDER BY sp2.service_process_seq DESC LIMIT 1 
+			) AS n_owner_id, 
+			( SELECT owner_nm 
+				FROM service_processes_tbl sp2 
+				WHERE sp2.request_id = rm.request_id AND sp2.use_yn = 'Y'
+				ORDER BY sp2.service_process_seq DESC LIMIT 1 
+			) AS n_owner_nm, 
+			
+			rm.request_date, 
+			rm.requester_id, rm.requester_nm, 
+			rm.system_info_code,
+			( SELECT system_info_nm FROM system_info_master
+			  WHERE system_info_code = rm.system_info_code ) AS 'system_info_nm', 
+			  
+			rm.request_type, 
+			( SELECT request_type_nm FROM request_type_master
+			  WHERE request_type_code = rm.request_type ) AS 'request_type_nm', 
+			  
+			rm.request_category, 
+			( SELECT request_category_nm FROM request_category_master
+			  WHERE request_category_code = rm.request_category ) AS 'request_category_nm', 
+			
+			rm.request_category_item,
+			( SELECT request_category_item_nm FROM request_category_item
+			  WHERE request_item_code = rm.request_category_item ) AS 'request_category_item_nm', 
+			
+			sp.service_process_id, sp.service_process_seq,
+			sp.process_date,
+			sp.title, sp.context,
+			sp.status, 
+			(SELECT code_nm FROM sy_code_detail WHERE master_code = 'MC1015' AND  detail_code = sp.status) AS status_nm, 
+			sp.comment,
+			
+			sp.owner_id, sp.owner_nm,
+			
+			sp.admin_level_type_code,
+			( SELECT admin_level_type_nm FROM level_type_assign_master
+			  WHERE admin_level_type_code = sp.admin_level_type_code ) AS 'admin_level_type_nm', 
+			 
+			( SELECT user_level_type_nm FROM level_type_assign_master
+			  WHERE admin_level_type_code = sp.admin_level_type_code ) AS 'user_level_type_nm', 
+			
+			sp.processed_type_code, 
+			( SELECT processed_type_nm FROM processed_type_master 
+			  WHERE processed_type_code = sp.processed_type_code ) AS 'processed_type_nm', 
+			
+			sp.control_gubun, 
+			
+			sp.approver_id, sp.approver_nm, 
+			
+			(SELECT spt.approver_id FROM service_processes_tbl spt
+				WHERE rm.request_id = spt.request_id AND spt.use_yn = 'Y' AND spt.status IN ("MD1266") <!--  , "MD1267", "MD1268" -->
+				ORDER BY spt.service_process_seq DESC
+				LIMIT 1
+			) AS n_approver_id, 
+			(SELECT spt.approver_nm FROM service_processes_tbl spt 
+				WHERE rm.request_id = spt.request_id AND spt.use_yn = 'Y' AND spt.status IN ("MD1266") <!--  , "MD1267", "MD1268" -->
+				ORDER BY spt.service_process_seq DESC
+				LIMIT 1
+			) AS n_approver_nm, 
+				
+			sp.use_yn,
+			sp.creator, sp.updater,
+			sp.date_created, sp.date_updated,
+			sp.file_group
+		FROM request_management_tbl rm
+		
+		INNER JOIN service_processes_tbl sp
+		ON rm.request_id = sp.request_id
+		
+		WHERE rm.use_yn = 'Y'
+		AND sp.use_yn = 'Y'
+		<if test="request_id != null and !''.equals(request_id) ">
+			AND rm.request_id = #{request_id}
+		</if>
+		<if test="request_seq != null and !''.equals(request_seq) ">
+			AND sp.request_seq = #{request_seq}
+		</if>
+		ORDER BY sp.request_seq ASC
+	</select>
+	
+	<!-- Appr -->
+	<select id="selectApprHeader" parameterType="SYCaseVo" resultType="SYCaseVo">
+		SELECT 
+			(SELECT COUNT(*)
+			FROM service_processes_tbl spt
+			WHERE spt.use_yn = 'Y' AND spt.request_id = s.request_id
+			AND spt.status IN ('MD1266') AND spt.approver_id = #{approver_id}) as value1, 
+			
+			(SELECT COUNT(*)
+			FROM service_processes_tbl spt
+			WHERE spt.use_yn = 'Y' AND spt.request_id = s.request_id
+			AND spt.status IN ('MD1267', 'MD1268') AND spt.approver_id = #{approver_id}) as value2,
+		s.* FROM 
+		(
+			SELECT 
+				rm.request_id, 
+				sp.request_seq, 
+				sp.plan_due_date, 
+				sp.request_due_date, 
+				sp.priority_code, 
+				( 
+					CASE 
+						WHEN sp.priority_code = 'h' THEN 'High'
+						WHEN sp.priority_code = 'm' THEN 'Medium'
+						WHEN sp.priority_code = 'l' THEN 'Low'
+					END
+				) as priority_nm, 
+				
+				(
+					SELECT 
+					COUNT(*)
+					FROM service_processes_tbl
+					WHERE 1=1 AND use_yn = 'Y' 
+					AND request_id = rm.request_id
+					AND status = 'MD1266'
+				) AS 'allApprCount',
+				
+				( SELECT COUNT(*)  
+					FROM service_processes_tbl sp2 WHERE sp2.use_yn = 'Y'
+					AND sp2.service_process_seq != 0
+					
+					AND sp2.request_id = rm.request_id
+					<if test="hap_search == null or hap_search == ''">
+						AND 1=0
+					</if>
+					<if test="hap_search != null and hap_search != ''">
+						AND 
+							(
+								sp2.title LIKE CONCAT('%', #{hap_search}, '%')
+								OR 
+									sp2.context LIKE CONCAT('%', #{hap_search}, '%')
+							)
+					</if>
+					<!-- ★★★★★★★ -->
+					<if test="approver_id != null and !''.equals( approver_id ) ">
+						AND sp2.request_seq IN ( 
+<!-- 						AND sp.request_id IN (  -->
+							SELECT spt.request_seq FROM service_processes_tbl spt
+<!-- 							SELECT spt.request_id FROM service_processes_tbl spt -->
+							WHERE spt.use_yn = 'Y' 
+							<choose>
+								<when test="'Close'.equals( cmd )">
+									AND spt.status IN ('MD1267', 'MD1268')
+								</when>
+								<when test="'MD1266'.equals( cmd )">
+<!-- 									AND sp2.request_seq IN (  -->
+<!-- 										SELECT spt.request_seq FROM service_processes_tbl spt -->
+<!-- 										WHERE spt.use_yn = 'Y'  -->
+									AND spt.status = 'MD1266'
+<!-- 										AND spt.approver_id = #{approver_id} -->
+<!-- 									) -->
+								</when>
+								<otherwise>
+									AND spt.status IN ('MD1266', 'MD1267', 'MD1268')
+								</otherwise>
+							</choose>
+							AND spt.approver_id = #{approver_id}
+						)
+					</if>
+			 	) AS cmd, 
+				
+				( SELECT owner_id 
+					FROM service_processes_tbl sp2 
+					WHERE sp2.request_id = rm.request_id AND sp2.use_yn = 'Y'
+					AND sp2.service_process_seq != 0
+					ORDER BY sp2.service_process_seq DESC LIMIT 1 
+				) AS n_owner_id, 
+				( SELECT owner_nm 
+					FROM service_processes_tbl sp2 
+					WHERE sp2.request_id = rm.request_id AND sp2.use_yn = 'Y'
+					AND sp2.service_process_seq != 0
+					ORDER BY sp2.service_process_seq DESC LIMIT 1 
+				) AS n_owner_nm, 
+				
+				rm.request_date, 
+				rm.requester_id, rm.requester_nm, 
+				rm.system_info_code,
+				( SELECT system_info_nm FROM system_info_master
+				  WHERE system_info_code = rm.system_info_code ) AS 'system_info_nm', 
+				  
+				rm.request_type, 
+				( SELECT request_type_nm FROM request_type_master
+				  WHERE request_type_code = rm.request_type ) AS 'request_type_nm', 
+				  
+				rm.request_category, 
+				( SELECT request_category_nm FROM request_category_master
+				  WHERE request_category_code = rm.request_category ) AS 'request_category_nm', 
+				
+				rm.request_category_item,
+				( SELECT request_category_item_nm FROM request_category_item
+				  WHERE request_item_code = rm.request_category_item ) AS 'request_category_item_nm', 
+				
+				sp.service_process_id, sp.service_process_seq,
+				sp.process_date,
+				sp.title, sp.context,
+				sp.status, 
+				(SELECT code_nm FROM sy_code_detail WHERE master_code = 'MC1015' AND  detail_code = sp.status) AS status_nm, 
+				sp.comment,
+				
+				sp.owner_id, sp.owner_nm,
+				
+				sp.admin_level_type_code,
+				( SELECT admin_level_type_nm FROM level_type_assign_master
+				  WHERE admin_level_type_code = sp.admin_level_type_code ) AS 'admin_level_type_nm', 
+				 
+				( SELECT user_level_type_nm FROM level_type_assign_master
+				  WHERE admin_level_type_code = sp.admin_level_type_code ) AS 'user_level_type_nm', 
+				
+				sp.processed_type_code, 
+				( SELECT processed_type_nm FROM processed_type_master 
+				  WHERE processed_type_code = sp.processed_type_code ) AS 'processed_type_nm', 
+				
+				sp.control_gubun, 
+				
+				sp.approver_id, sp.approver_nm, 
+				
+				(SELECT spt.approver_id FROM service_processes_tbl spt
+					WHERE rm.request_id = spt.request_id AND spt.use_yn = 'Y' AND spt.status IN ("MD1266") 
+					ORDER BY spt.service_process_seq DESC
+					LIMIT 1
+				) AS n_approver_id, 
+				(SELECT spt.approver_nm FROM service_processes_tbl spt 
+					WHERE rm.request_id = spt.request_id AND spt.use_yn = 'Y' AND spt.status IN ("MD1266") 
+					ORDER BY spt.service_process_seq DESC
+					LIMIT 1
+				) AS n_approver_nm, 
+					
+				sp.use_yn,
+				sp.creator, sp.updater,
+				sp.date_created, sp.date_updated,
+				
+				sp.file_group
+				
+			FROM request_management_tbl rm
+			
+			INNER JOIN service_processes_tbl sp
+			ON rm.request_id = sp.request_id
+			
+			WHERE rm.use_yn = 'Y'
+			AND sp.use_yn = 'Y'
+			AND sp.service_process_seq = 0
+			
+			<if test="request_id != null and !''.equals(request_id) ">
+				AND sp.request_id = #{request_id}
+			</if>
+			<if test="request_seq != null and !''.equals(request_seq) ">
+				AND sp.request_seq = #{request_seq}
+			</if>
+			
+			<!-- 다른 queue라도 승인 대기중에서 보이게 -->
+			<!-- 
+			<if test="system_info_codes != null and !''.equals(system_info_codes) ">
+				AND rm.system_info_code IN 
+				(
+					SELECT system_info_code
+					FROM system_queue_master sq
+					INNER JOIN queue_user_tbl qu ON sq.queue_code = qu.queue_code
+					INNER JOIN user_tbl u ON qu.user_no = u.user_no
+					WHERE u.user_id = #{system_info_codes} AND u.use_yn = 'Y' AND sq.use_yn = 'Y'
+					GROUP BY sq.system_info_code
+				)
+			</if>
+			 -->
+			
+			<if test="approver_id != null and !''.equals( approver_id ) ">
+				AND sp.request_id IN ( 
+					SELECT spt.request_id FROM service_processes_tbl spt
+					WHERE spt.use_yn = 'Y' 
+					<choose>
+						<when test="'Close'.equals( cmd )">
+<!-- 							AND sp.request_id IN (  -->
+<!-- 								SELECT spt.request_id FROM service_processes_tbl spt -->
+<!-- 								WHERE spt.use_yn = 'Y'  -->
+								AND spt.status IN ('MD1267', 'MD1268')
+<!-- 								AND spt.approver_id = #{approver_id}  -->
+<!-- 							) -->
+						</when>
+						<when test="'MD1266'.equals( cmd )">
+								AND spt.status = 'MD1266'
+						</when>
+						<otherwise>
+								AND spt.status IN ('MD1266', 'MD1267', 'MD1268')
+						</otherwise>
+					</choose>
+					AND spt.approver_id = #{approver_id}
+					<if test="hap_search != null and hap_search != ''">
+						AND (
+								spt.title LIKE CONCAT('%', #{hap_search}, '%')
+								OR 
+								spt.context LIKE CONCAT('%', #{hap_search}, '%')
+							)
+					</if>
+				)
+			</if>
+			
+			<if test="hap_search != null and hap_search != ''">
+				AND	 (  sp.title 			LIKE CONCAT('%', #{hap_search}, '%') 
+						OR sp.context 		LIKE CONCAT('%', #{hap_search}, '%')
+						OR rm.request_id IN 
+							( SELECT DISTINCT(sp2.request_id)  
+								FROM service_processes_tbl sp2 WHERE sp2.use_yn = 'Y'
+								AND 
+									(
+										sp2.context LIKE CONCAT('%', #{hap_search}, '%')
+										OR
+										sp2.title LIKE CONCAT('%', #{hap_search}, '%')	
+									)
+							)
+						OR ( SELECT system_info_nm FROM system_info_master
+					  		  WHERE system_info_code = rm.system_info_code ) LIKE CONCAT('%', #{hap_search}, '%')
+				  	 )
+			</if>
+			
+			<if test="process_date != null and !''.equals( process_date ) ">
+					AND LEFT(sp.process_date, 10) 
+					BETWEEN 
+						 LEFT(#{process_date}, 10)
+					AND  RIGHT(#{process_date}, 10)
+			</if>
+			
+<!-- 		ORDER BY sp.request_seq ASC -->
+			ORDER BY sp.process_date DESC
+		) s
+		ORDER BY s.process_date DESC
+	</select>
+	
+	<select id="selectApprSub" parameterType="SYCaseVo" resultType="SYCaseVo">
+		SELECT 
+			rm.request_id, 
+			sp.request_seq, 
+			sp.plan_due_date, 
+			sp.request_due_date, 
+			sp.priority_code, 
+			( 
+				CASE 
+					WHEN sp.priority_code = 'h' THEN 'High'
+					WHEN sp.priority_code = 'm' THEN 'Medium'
+					WHEN sp.priority_code = 'l' THEN 'Low'
+				END
+			) as priority_nm, 
+			(
+				SELECT 
+				COUNT(*)
+				FROM service_processes_tbl
+				WHERE 1=1 AND use_yn = 'Y' 
+				AND request_id = rm.request_id
+				AND status = 'MD1266'
+			) AS 'allApprCount',
+			
+			( SELECT owner_id 
+				FROM service_processes_tbl sp2 
+				WHERE sp2.request_id = rm.request_id AND sp2.use_yn = 'Y'
+				ORDER BY sp2.service_process_seq DESC LIMIT 1 
+			) AS n_owner_id, 
+			( SELECT owner_nm 
+				FROM service_processes_tbl sp2 
+				WHERE sp2.request_id = rm.request_id AND sp2.use_yn = 'Y'
+				ORDER BY sp2.service_process_seq DESC LIMIT 1 
+			) AS n_owner_nm, 
+			
+			rm.request_date, 
+			rm.requester_id, rm.requester_nm, 
+			rm.system_info_code,
+			( SELECT system_info_nm FROM system_info_master
+			  WHERE system_info_code = rm.system_info_code ) AS 'system_info_nm', 
+			  
+			rm.request_type, 
+			( SELECT request_type_nm FROM request_type_master
+			  WHERE request_type_code = rm.request_type ) AS 'request_type_nm', 
+			  
+			rm.request_category, 
+			( SELECT request_category_nm FROM request_category_master
+			  WHERE request_category_code = rm.request_category ) AS 'request_category_nm', 
+			
+			rm.request_category_item,
+			( SELECT request_category_item_nm FROM request_category_item
+			  WHERE request_item_code = rm.request_category_item ) AS 'request_category_item_nm', 
+			
+			sp.service_process_id, sp.service_process_seq,
+			sp.process_date,
+			sp.title, sp.context,
+			sp.status, 
+			(SELECT code_nm FROM sy_code_detail WHERE master_code = 'MC1015' AND  detail_code = sp.status) AS status_nm, 
+			sp.comment,
+			
+			sp.owner_id, sp.owner_nm,
+			
+			sp.admin_level_type_code,
+			( SELECT admin_level_type_nm FROM level_type_assign_master
+			  WHERE admin_level_type_code = sp.admin_level_type_code ) AS 'admin_level_type_nm', 
+			 
+			( SELECT user_level_type_nm FROM level_type_assign_master
+			  WHERE admin_level_type_code = sp.admin_level_type_code ) AS 'user_level_type_nm', 
+			
+			sp.processed_type_code, 
+			( SELECT processed_type_nm FROM processed_type_master 
+			  WHERE processed_type_code = sp.processed_type_code ) AS 'processed_type_nm', 
+			
+			sp.control_gubun,
+			 
+			sp.approver_id, sp.approver_nm, 
+			
+			(SELECT spt.approver_id FROM service_processes_tbl spt
+				WHERE rm.request_id = spt.request_id AND spt.use_yn = 'Y' AND spt.status IN ("MD1266") 
+				ORDER BY spt.service_process_seq DESC
+				LIMIT 1
+			) AS n_approver_id, 
+			(SELECT spt.approver_nm FROM service_processes_tbl spt 
+				WHERE rm.request_id = spt.request_id AND spt.use_yn = 'Y' AND spt.status IN ("MD1266") 
+				ORDER BY spt.service_process_seq DESC
+				LIMIT 1
+			) AS n_approver_nm, 
+				
+			sp.use_yn,
+			sp.creator, sp.updater,
+			sp.date_created, sp.date_updated,
+			sp.file_group
+		FROM request_management_tbl rm
+		
+		INNER JOIN service_processes_tbl sp
+		ON rm.request_id = sp.request_id
+		
+		WHERE rm.use_yn = 'Y'
+		AND sp.use_yn = 'Y'
+		AND sp.service_process_seq != 0
+		<if test="request_id != null and !''.equals(request_id) ">
+			AND rm.request_id = #{request_id}
+		</if>
+		
+		<!-- 서브 전체 x라면 -->
+		<if test="approver_id != null and !''.equals( approver_id ) ">
+				<choose>
+					<when test="'Close'.equals( cmd )">
+						AND sp.request_seq IN ( 
+							SELECT spt.request_seq FROM service_processes_tbl spt
+							WHERE spt.use_yn = 'Y' 
+							AND spt.status IN ('MD1267', 'MD1268')
+							AND spt.approver_id = #{approver_id}
+						)
+					</when>
+					<when test="'MD1266'.equals( cmd )">
+						AND sp.request_seq IN ( 
+							SELECT spt.request_seq FROM service_processes_tbl spt
+							WHERE spt.use_yn = 'Y' 
+							AND spt.status = 'MD1266'
+							AND spt.approver_id = #{approver_id}
+						)
+					</when>
+					<otherwise>
+						AND sp.request_seq IN ( 
+							SELECT spt.request_seq FROM service_processes_tbl spt
+							WHERE spt.use_yn = 'Y' 
+							AND spt.status IN ('MD1266', 'MD1267', 'MD1268')
+							AND spt.approver_id = #{approver_id}
+						)
+					</otherwise>
+				</choose>
+			</if>
+			
+			<if test="hap_search != null and hap_search != ''">
+				AND	 (  sp.title 		LIKE CONCAT('%', #{hap_search}, '%') 
+						OR sp.context 	LIKE CONCAT('%', #{hap_search}, '%') )
+			</if>
+		
+		ORDER BY sp.request_seq ASC
+	</select>
+	
+	<select id="loadWait" parameterType="SYCaseVo" resultType="SYCaseVo">
+		SELECT 
+<!-- 			SUM(s.allApprCount) AS allApprCount,  -->
+			(
+				SELECT COUNT(*)
+				FROM service_processes_tbl spt
+				WHERE spt.use_yn = 'Y'
+					AND spt.status IN ('MD1266') 
+					<!-- AND spt.approver_id
+					IN (
+						SELECT qu.user_id
+						FROM queue_user_tbl qu
+						INNER JOIN user_tbl u ON qu.user_no = u.user_no
+						WHERE qu.queue_code = 'QC00000001' AND u.use_yn = 'Y'
+					) -->
+				<if test="queue_code != null and !''.equals( queue_code ) ">
+					AND spt.approver_id IN 
+						( SELECT qu.user_id 
+							FROM queue_user_tbl qu 
+							INNER JOIN user_tbl u ON qu.user_no = u.user_no
+							WHERE qu.queue_code = #{queue_code}
+							AND u.use_yn = 'Y'
+						)
+				</if>
+				<if test="owner_id != null and !''.equals(owner_id) ">
+					AND spt.approver_id = #{owner_id}
+				</if>
+			) AS 'allApprCount', 
+			
+			COUNT(*) AS value1, s.* 
+		FROM   
+		(
+			SELECT 
+				sp.admin_level_type_code,
+				( SELECT admin_level_type_nm FROM level_type_assign_master
+				  WHERE admin_level_type_code = sp.admin_level_type_code ) AS 'admin_level_type_nm', 
+				 
+				( SELECT user_level_type_nm FROM level_type_assign_master
+				  WHERE admin_level_type_code = sp.admin_level_type_code ) AS 'user_level_type_nm', 
+				
+				sp.request_seq
+				, sp.owner_nm
+				, rm.system_info_code
+				
+				, sp.status
+<!-- 				, ( SELECT COUNT(*) FROM service_processes_tbl -->
+<!-- 					WHERE 1=1 AND use_yn = 'Y' AND STATUS = 'MD1266' AND request_id = rm.request_id) AS 'allApprCount' -->
+
+					<!-- 
+					, (
+						SELECT COUNT(*)
+						FROM service_processes_tbl spt
+						WHERE spt.use_yn = 'Y'
+							AND spt.status IN ('MD1266') 
+						<if test="queue_code != null and !''.equals( queue_code ) ">
+							AND spt.approver_id IN 
+								( SELECT qu.user_id 
+									FROM queue_user_tbl qu 
+									INNER JOIN user_tbl u ON qu.user_no = u.user_no
+									WHERE qu.queue_code = #{queue_code}
+									AND u.use_yn = 'Y'
+								)
+						</if>
+						<if test="owner_id != null and !''.equals(owner_id) ">
+							AND spt.approver_id = #{owner_id}
+						</if>
+					) AS 'allApprCount'
+					 -->
+				FROM request_management_tbl rm
+				INNER JOIN service_processes_tbl sp
+						ON rm.request_id = sp.request_id 
+				WHERE 
+					rm.use_yn = 'Y'
+					AND sp.use_yn = 'Y'
+					AND sp.service_process_seq = 0
+					
+				<if test="member_id != null and !''.equals(member_id) ">
+					AND rm.system_info_code IN (
+						SELECT system_info_code
+						FROM system_queue_master sq
+						INNER JOIN queue_user_tbl qu ON sq.queue_code = qu.queue_code
+						INNER JOIN user_tbl u ON qu.user_no = u.user_no
+						WHERE u.user_id = #{member_id}
+						AND u.use_yn = 'Y' 
+						AND sq.use_yn = 'Y'
+						GROUP BY sq.system_info_code
+					)
+				</if>
+				<if test="queue_code != null and !''.equals( queue_code ) ">
+					AND (
+						SELECT owner_id
+						FROM service_processes_tbl sp2
+						WHERE sp2.request_id = rm.request_id AND sp2.use_yn = 'Y'
+						ORDER BY sp2.service_process_seq DESC
+						LIMIT 1) IN 
+						( SELECT qu.user_id 
+							FROM queue_user_tbl qu 
+							INNER JOIN user_tbl u ON qu.user_no = u.user_no
+							WHERE qu.queue_code = #{queue_code}
+							AND u.use_yn = 'Y'
+						)
+				</if>
+				<if test="owner_id != null and !''.equals(owner_id) ">
+					AND (
+						SELECT owner_id
+						FROM service_processes_tbl sp2
+						WHERE sp2.request_id = rm.request_id 
+						AND sp2.use_yn = 'Y'
+						ORDER BY sp2.service_process_seq DESC
+						LIMIT 1
+					) = #{owner_id}
+				</if>
+		) s 	
+		GROUP BY s.admin_level_type_code
+	</select>
+	
+	<select id="loadCaseCount_q" parameterType="SYCaseVo" resultType="SYCaseVo">
+		SELECT 
+			 SUM(s.Today) AS value1, SUM(s.Weekly) AS value2, SUM(s.Monthly) AS value3, 
+			 s.*
+			FROM (
+			SELECT 
+			'Open', 
+			sp.admin_level_type_code, 
+			
+			(SELECT admin_level_type_nm FROM level_type_assign_master
+			WHERE admin_level_type_code = sp.admin_level_type_code) AS 'admin_level_type_nm', 
+			
+			(SELECT user_level_type_nm FROM level_type_assign_master
+			WHERE admin_level_type_code = sp.admin_level_type_code) AS 'user_level_type_nm', 
+			
+			CASE  WHEN sp.admin_level_type_code = 'alt_05' THEN 'OPEN' 
+			END AS cmd, 
+			
+			(
+				SELECT COUNT(*) FROM service_processes_tbl sp2 
+				WHERE sp2.request_seq = sp.request_seq 
+				AND DATE(sp2.date_created) = CURDATE()
+			) AS 'Today', 
+			
+			(
+				SELECT COUNT(*) FROM service_processes_tbl sp2 
+				WHERE sp2.request_seq = sp.request_seq 
+				AND DATE(sp2.date_created) 
+						BETWEEN SUBDATE(CURDATE(), DATE_FORMAT(CURDATE(),'%w')-1) 
+						AND SUBDATE(CURDATE(), DATE_FORMAT(CURDATE(),'%w')-7)
+			) AS 'Weekly', 
+			
+			(
+				SELECT COUNT(*) FROM service_processes_tbl sp2 
+				WHERE sp2.request_seq = sp.request_seq 
+				AND sp2.date_created LIKE CONCAT( #{date_created} ,'-%')
+			) AS 'Monthly', 
+			
+			
+			sp.request_id, 
+			sp.date_created
+		
+		FROM request_management_tbl rm
+		INNER JOIN service_processes_tbl sp ON rm.request_id = sp.request_id
+		WHERE rm.use_yn = 'Y' AND sp.use_yn = 'Y' 
+			AND sp.service_process_seq = 0 
+			
+			AND sp.admin_level_type_code = 'alt_05'
+			
+			<!-- Queue -->
+			<if test="member_id != null and !''.equals(member_id) ">
+				AND rm.system_info_code IN (
+					SELECT system_info_code
+					FROM system_queue_master sq
+					INNER JOIN queue_user_tbl qu ON sq.queue_code = qu.queue_code
+					INNER JOIN user_tbl u ON qu.user_no = u.user_no
+					WHERE u.user_id = #{member_id}
+					AND u.use_yn = 'Y' 
+					AND sq.use_yn = 'Y'
+					GROUP BY sq.system_info_code
+				)
+			</if>
+			<if test="queue_code != null and !''.equals( queue_code ) ">
+				AND (
+					SELECT owner_id
+					FROM service_processes_tbl sp2
+					WHERE sp2.request_id = rm.request_id AND sp2.use_yn = 'Y'
+					ORDER BY sp2.service_process_seq DESC
+					LIMIT 1) IN 
+					( SELECT qu.user_id 
+						FROM queue_user_tbl qu 
+						INNER JOIN user_tbl u ON qu.user_no = u.user_no
+						WHERE qu.queue_code = #{queue_code}
+						AND u.use_yn = 'Y'
+					)
+			</if>
+			
+			<!-- 개인 -->
+			<if test="owner_id != null and !''.equals(owner_id) ">
+				AND (
+					SELECT owner_id
+					FROM service_processes_tbl sp2
+					WHERE sp2.request_id = rm.request_id 
+					AND sp2.use_yn = 'Y'
+					ORDER BY sp2.service_process_seq DESC
+					LIMIT 1
+				) = #{owner_id}
+			</if>
+		
+		UNION ALL
+		
+		SELECT 
+			'Closed (Success)', 
+			sp.admin_level_type_code, 
+			
+			(SELECT admin_level_type_nm FROM level_type_assign_master
+			WHERE admin_level_type_code = sp.admin_level_type_code) AS 'admin_level_type_nm', 
+			
+			(SELECT user_level_type_nm FROM level_type_assign_master
+			WHERE admin_level_type_code = sp.admin_level_type_code) AS 'user_level_type_nm', 
+			
+			CASE  WHEN sp.admin_level_type_code = 'alt_02' THEN 'Closed'
+			END AS cmd, 
+			
+			(
+				SELECT COUNT(*) FROM service_processes_tbl sp2 
+				WHERE sp2.request_seq = sp.request_seq 
+				AND DATE(sp2.date_created) = CURDATE()
+			) AS 'Today', 
+			
+			(
+				SELECT COUNT(*) FROM service_processes_tbl sp2 
+				WHERE sp2.request_seq = sp.request_seq 
+				AND DATE(sp2.date_created) 
+						BETWEEN SUBDATE(CURDATE(), DATE_FORMAT(CURDATE(),'%w')-1) 
+						AND SUBDATE(CURDATE(), DATE_FORMAT(CURDATE(),'%w')-7)
+			) AS 'Weekly', 
+			
+			(
+				SELECT COUNT(*) FROM service_processes_tbl sp2 
+				WHERE sp2.request_seq = sp.request_seq 
+				AND sp2.date_created LIKE CONCAT( #{date_created} ,'-%')
+			) AS 'Monthly', 
+			
+			
+			sp.request_id, 
+			sp.date_created
+			
+		FROM request_management_tbl rm
+		INNER JOIN service_processes_tbl sp ON rm.request_id = sp.request_id
+		WHERE rm.use_yn = 'Y' AND sp.use_yn = 'Y' 
+			AND sp.service_process_seq = 0 
+			
+			AND sp.admin_level_type_code = 'alt_02'
+			
+			<!-- Queue -->
+			<if test="member_id != null and !''.equals(member_id) ">
+				AND rm.system_info_code IN (
+					SELECT system_info_code
+					FROM system_queue_master sq
+					INNER JOIN queue_user_tbl qu ON sq.queue_code = qu.queue_code
+					INNER JOIN user_tbl u ON qu.user_no = u.user_no
+					WHERE u.user_id = #{member_id}
+					AND u.use_yn = 'Y' 
+					AND sq.use_yn = 'Y'
+					GROUP BY sq.system_info_code
+				)
+			</if>
+			<if test="queue_code != null and !''.equals( queue_code ) ">
+				AND (
+					SELECT owner_id
+					FROM service_processes_tbl sp2
+					WHERE sp2.request_id = rm.request_id AND sp2.use_yn = 'Y'
+					ORDER BY sp2.service_process_seq DESC
+					LIMIT 1) IN 
+					( SELECT qu.user_id 
+						FROM queue_user_tbl qu 
+						INNER JOIN user_tbl u ON qu.user_no = u.user_no
+						WHERE qu.queue_code = #{queue_code}
+						AND u.use_yn = 'Y'
+					)
+			</if>
+			
+			<!-- 개인 -->
+			<if test="owner_id != null and !''.equals(owner_id) ">
+				AND (
+					SELECT owner_id
+					FROM service_processes_tbl sp2
+					WHERE sp2.request_id = rm.request_id 
+					AND sp2.use_yn = 'Y'
+					ORDER BY sp2.service_process_seq DESC
+					LIMIT 1
+				) = #{owner_id}
+			</if>
+		
+		UNION ALL 
+		
+		SELECT 
+			'Closed (Fail)', 
+			sp.admin_level_type_code, 
+			
+			(SELECT admin_level_type_nm FROM level_type_assign_master
+			WHERE admin_level_type_code = sp.admin_level_type_code) AS 'admin_level_type_nm', 
+			
+			(SELECT user_level_type_nm FROM level_type_assign_master
+			WHERE admin_level_type_code = sp.admin_level_type_code) AS 'user_level_type_nm', 
+			
+			CASE  WHEN sp.admin_level_type_code = 'alt_07' THEN 'Closed'
+			END AS cmd, 
+			
+			(
+				SELECT COUNT(*) FROM service_processes_tbl sp2 
+				WHERE sp2.request_seq = sp.request_seq 
+				AND DATE(sp2.date_created) = CURDATE()
+			) AS 'Today', 
+			
+			(
+				SELECT COUNT(*) FROM service_processes_tbl sp2 
+				WHERE sp2.request_seq = sp.request_seq 
+				AND DATE(sp2.date_created) 
+						BETWEEN SUBDATE(CURDATE(), DATE_FORMAT(CURDATE(),'%w')-1) 
+						AND SUBDATE(CURDATE(), DATE_FORMAT(CURDATE(),'%w')-7)
+			) AS 'Weekly', 
+			
+			(
+				SELECT COUNT(*) FROM service_processes_tbl sp2 
+				WHERE sp2.request_seq = sp.request_seq 
+				AND sp2.date_created LIKE CONCAT( #{date_created} ,'-%')
+			) AS 'Monthly', 
+			
+			
+			sp.request_id, 
+			sp.date_created
+		
+		FROM request_management_tbl rm
+		INNER JOIN service_processes_tbl sp ON rm.request_id = sp.request_id
+		WHERE rm.use_yn = 'Y' AND sp.use_yn = 'Y' 
+			AND sp.service_process_seq = 0 
+			
+			AND sp.admin_level_type_code  = 'alt_07'
+			
+			<!-- Queue -->
+			<if test="member_id != null and !''.equals(member_id) ">
+				AND rm.system_info_code IN (
+					SELECT system_info_code
+					FROM system_queue_master sq
+					INNER JOIN queue_user_tbl qu ON sq.queue_code = qu.queue_code
+					INNER JOIN user_tbl u ON qu.user_no = u.user_no
+					WHERE u.user_id = #{member_id}
+					AND u.use_yn = 'Y' 
+					AND sq.use_yn = 'Y'
+					GROUP BY sq.system_info_code
+				)
+			</if>
+			<if test="queue_code != null and !''.equals( queue_code ) ">
+				AND (
+					SELECT owner_id
+					FROM service_processes_tbl sp2
+					WHERE sp2.request_id = rm.request_id AND sp2.use_yn = 'Y'
+					ORDER BY sp2.service_process_seq DESC
+					LIMIT 1) IN 
+					( SELECT qu.user_id 
+						FROM queue_user_tbl qu 
+						INNER JOIN user_tbl u ON qu.user_no = u.user_no
+						WHERE qu.queue_code = #{queue_code}
+						AND u.use_yn = 'Y'
+					)
+			</if>
+			
+			<!-- 개인 -->
+			<if test="owner_id != null and !''.equals(owner_id) ">
+				AND (
+					SELECT owner_id
+					FROM service_processes_tbl sp2
+					WHERE sp2.request_id = rm.request_id 
+					AND sp2.use_yn = 'Y'
+					ORDER BY sp2.service_process_seq DESC
+					LIMIT 1
+				) = #{owner_id}
+			</if>
+		) s
+		
+		GROUP BY s.cmd
+		ORDER BY s.cmd DESC
+	</select>
+	
+	<select id="loadChart1" parameterType="SYCaseVo" resultType="SYCaseVo">
+		SELECT 
+			rm.system_info_code,
+			( SELECT system_info_nm FROM system_info_master
+			  WHERE system_info_code = rm.system_info_code ) AS system_info_nm, 
+
+			IFNULL(CASE WHEN rm.status <![CDATA[ <> ]]> 'MD1258' THEN  COUNT(rm.request_id) END, 0) AS value1, 
+			COUNT(rm.request_id) AS value2, 
+			CONCAT (
+				ROUND(( IFNULL(case when rm.status <![CDATA[ <> ]]> 'MD1258' then COUNT(rm.request_id) END, 0) /COUNT(rm.request_id))*100,0)
+<!-- 				, '%' -->
+			) AS value3
+			FROM request_management_tbl rm
+			INNER JOIN service_processes_tbl sp
+					ON rm.request_id = sp.request_id
+				
+			WHERE 
+				rm.use_yn = 'Y'
+				AND sp.use_yn = 'Y'
+				AND sp.service_process_seq = 0
+				AND date(rm.plan_due_date) BETWEEN subdate(curdate(), date_format(curdate(),'%w')-1) 
+				AND subdate(curdate(), date_format(curdate(),'%w')-7) 
+				
+				<if test="member_id != null and !''.equals(member_id) ">
+					AND rm.system_info_code IN (
+						SELECT system_info_code
+						FROM system_queue_master sq
+						INNER JOIN queue_user_tbl qu ON sq.queue_code = qu.queue_code
+						INNER JOIN user_tbl u ON qu.user_no = u.user_no
+						WHERE u.user_id = #{member_id}
+						AND u.use_yn = 'Y' 
+						AND sq.use_yn = 'Y'
+						GROUP BY sq.system_info_code
+					)
+				</if>
+				<if test="queue_code != null and !''.equals( queue_code ) ">
+					AND (
+						SELECT owner_id
+						FROM service_processes_tbl sp2
+						WHERE sp2.request_id = rm.request_id AND sp2.use_yn = 'Y'
+						ORDER BY sp2.service_process_seq DESC
+						LIMIT 1) IN 
+						( SELECT qu.user_id 
+							FROM queue_user_tbl qu 
+							INNER JOIN user_tbl u ON qu.user_no = u.user_no
+							WHERE qu.queue_code = #{queue_code}
+							AND u.use_yn = 'Y'
+						)
+				</if>
+				<if test="owner_id != null and !''.equals(owner_id) ">
+					AND (
+						SELECT owner_id
+						FROM service_processes_tbl sp2
+						WHERE sp2.request_id = rm.request_id 
+						AND sp2.use_yn = 'Y'
+						ORDER BY sp2.service_process_seq DESC
+						LIMIT 1
+					) = #{owner_id}
+				</if>
+				
+				GROUP BY rm.system_info_code 
+	</select>
+	
+	<select id="loadChart2" parameterType="SYCaseVo" resultType="SYCaseVo">
+		SELECT 
+			(
+				SELECT owner_id
+				FROM service_processes_tbl sp2
+				WHERE sp2.request_id = rm.request_id 
+				AND sp2.use_yn = 'Y'
+				ORDER BY sp2.service_process_seq DESC
+				LIMIT 1
+			) AS owner_id, 
+			(
+				SELECT owner_nm
+				FROM service_processes_tbl sp2
+				WHERE sp2.request_id = rm.request_id 
+				AND sp2.use_yn = 'Y'
+				ORDER BY sp2.service_process_seq DESC
+				LIMIT 1
+			) AS owner_nm, 
+			IFNULL(CASE WHEN rm.status <![CDATA[ <> ]]> 'MD1258' THEN  COUNT(rm.request_id) END, 0) AS value1, 
+			COUNT(rm.request_id) AS value2, 
+			CONCAT (
+				ROUND(( IFNULL(case when rm.status <![CDATA[ <> ]]> 'MD1258' then COUNT(rm.request_id) END, 0) /COUNT(rm.request_id))*100,0)
+			) AS value3
+			FROM request_management_tbl rm
+			INNER JOIN service_processes_tbl sp
+					ON rm.request_id = sp.request_id 
+			WHERE 
+				rm.use_yn = 'Y'
+				AND sp.use_yn = 'Y'
+				AND sp.service_process_seq = 0
+				AND date(rm.plan_due_date) BETWEEN subdate(curdate(), date_format(curdate(),'%w')-1) 
+				AND subdate(curdate(), date_format(curdate(),'%w')-7) 
+				
+				<if test="member_id != null and !''.equals(member_id) ">
+					AND rm.system_info_code IN (
+						SELECT system_info_code
+						FROM system_queue_master sq
+						INNER JOIN queue_user_tbl qu ON sq.queue_code = qu.queue_code
+						INNER JOIN user_tbl u ON qu.user_no = u.user_no
+						WHERE u.user_id = #{member_id}
+						AND u.use_yn = 'Y' 
+						AND sq.use_yn = 'Y'
+						GROUP BY sq.system_info_code
+					)
+				</if>
+				<if test="queue_code != null and !''.equals( queue_code ) ">
+					AND (
+						SELECT owner_id
+						FROM service_processes_tbl sp2
+						WHERE sp2.request_id = rm.request_id AND sp2.use_yn = 'Y'
+						ORDER BY sp2.service_process_seq DESC
+						LIMIT 1) IN 
+						( SELECT qu.user_id 
+							FROM queue_user_tbl qu 
+							INNER JOIN user_tbl u ON qu.user_no = u.user_no
+							WHERE qu.queue_code = #{queue_code}
+							AND u.use_yn = 'Y'
+						)
+				</if>
+				<if test="owner_id != null and !''.equals(owner_id) ">
+					AND (
+						SELECT owner_id
+						FROM service_processes_tbl sp2
+						WHERE sp2.request_id = rm.request_id 
+						AND sp2.use_yn = 'Y'
+						ORDER BY sp2.service_process_seq DESC
+						LIMIT 1
+					) = #{owner_id}
+				</if>
+				GROUP BY (
+							SELECT owner_id
+							FROM service_processes_tbl sp2
+							WHERE sp2.request_id = rm.request_id 
+							AND sp2.use_yn = 'Y'
+							ORDER BY sp2.service_process_seq DESC
+							LIMIT 1
+						)
+	</select>
+	
+	<select id="loadChart3" parameterType="SYCaseVo" resultType="SYCaseVo">
+		SELECT 
+			sp.admin_level_type_code,
+			( SELECT admin_level_type_nm FROM level_type_assign_master
+			  WHERE admin_level_type_code = sp.admin_level_type_code ) AS 'admin_level_type_nm', 
+			 
+			( SELECT user_level_type_nm FROM level_type_assign_master
+			  WHERE admin_level_type_code = sp.admin_level_type_code ) AS 'user_level_type_nm', 
+			
+			IFNULL(CASE WHEN rm.status <![CDATA[ <> ]]> 'MD1258' THEN  COUNT(rm.request_id) END, 0) AS value1, 
+			COUNT(rm.request_id) AS value2, 
+			CONCAT (
+				ROUND(( IFNULL(case when rm.status <![CDATA[ <> ]]> 'MD1258' then COUNT(rm.request_id) END, 0) / COUNT(rm.request_id))*100,0)
+			) AS value3
+			FROM request_management_tbl rm
+			INNER JOIN service_processes_tbl sp
+					ON rm.request_id = sp.request_id 
+			WHERE 
+				rm.use_yn = 'Y'
+				AND sp.use_yn = 'Y'
+				AND sp.service_process_seq = 0
+				AND date(rm.plan_due_date) BETWEEN subdate(curdate(), date_format(curdate(),'%w')-1) 
+				AND subdate(curdate(), date_format(curdate(),'%w')-7) 
+				
+				<if test="member_id != null and !''.equals(member_id) ">
+					AND rm.system_info_code IN (
+						SELECT system_info_code
+						FROM system_queue_master sq
+						INNER JOIN queue_user_tbl qu ON sq.queue_code = qu.queue_code
+						INNER JOIN user_tbl u ON qu.user_no = u.user_no
+						WHERE u.user_id = #{member_id}
+						AND u.use_yn = 'Y' 
+						AND sq.use_yn = 'Y'
+						GROUP BY sq.system_info_code
+					)
+				</if>
+				<if test="queue_code != null and !''.equals( queue_code ) ">
+					AND (
+						SELECT owner_id
+						FROM service_processes_tbl sp2
+						WHERE sp2.request_id = rm.request_id AND sp2.use_yn = 'Y'
+						ORDER BY sp2.service_process_seq DESC
+						LIMIT 1) IN 
+						( SELECT qu.user_id 
+							FROM queue_user_tbl qu 
+							INNER JOIN user_tbl u ON qu.user_no = u.user_no
+							WHERE qu.queue_code = #{queue_code}
+							AND u.use_yn = 'Y'
+						)
+				</if>
+				<if test="owner_id != null and !''.equals(owner_id) ">
+					AND (
+						SELECT owner_id
+						FROM service_processes_tbl sp2
+						WHERE sp2.request_id = rm.request_id 
+						AND sp2.use_yn = 'Y'
+						ORDER BY sp2.service_process_seq DESC
+						LIMIT 1
+					) = #{owner_id}
+				</if>
+				GROUP BY sp.admin_level_type_code
+	</select>
+	
+	<select id="loadChart4" parameterType="SYCaseVo" resultType="SYCaseVo">
+		SELECT 
+			SUM(cnt), 
+			COUNT(*), 
+				
+			SUM(cnt) AS cmd, 
+			CONCAT(ROUND((SUM(cnt) / COUNT(s.request_id)),1)) AS value1, 
+			s.*
+		FROM 
+		(
+			SELECT 
+				rm.system_info_code, 
+				( SELECT system_info_nm FROM system_info_master
+						 WHERE system_info_code = rm.system_info_code ) AS 'system_info_nm', 
+				sp.admin_level_type_code AS 'Step', 
+				(SELECT admin_level_type_nm FROM level_type_assign_master
+				WHERE admin_level_type_code = sp.admin_level_type_code) AS 'admin_level_type_nm', 
+				
+				(SELECT user_level_type_nm FROM level_type_assign_master
+				WHERE admin_level_type_code = sp.admin_level_type_code) AS 'user_level_type_nm', 
+				
+				sp.date_created AS 'sp_date_created', 
+				
+				( SELECT sp2.date_created FROM service_processes_tbl sp2 
+					WHERE sp.request_id = sp2.request_id AND sp2.admin_level_type_code = 'alt_06' AND sp2.service_process_seq != 0 
+					ORDER BY sp2.request_id, sp2.request_seq DESC LIMIT 1
+				) AS st_dt, 
+				
+				DATEDIFF(
+					( SELECT sp2.date_created FROM service_processes_tbl sp2 
+						WHERE sp.request_id = sp2.request_id AND sp2.admin_level_type_code = 'alt_06' AND sp2.service_process_seq != 0 
+						ORDER BY sp2.request_id, sp2.request_seq DESC LIMIT 1
+					), 
+					sp.date_created 
+				) AS 'cnt',	
+					
+				sp.*
+	
+			FROM request_management_tbl rm
+			INNER JOIN service_processes_tbl sp 
+			ON rm.request_id = sp.request_id
+			
+			WHERE 
+				rm.use_yn = 'Y' AND sp.use_yn = 'Y' 
+
+			<if test="member_id != null and !''.equals(member_id) ">
+				AND rm.system_info_code IN (
+				SELECT system_info_code
+				FROM system_queue_master sq
+				INNER JOIN queue_user_tbl qu ON sq.queue_code = qu.queue_code
+				INNER JOIN user_tbl u ON qu.user_no = u.user_no
+				WHERE u.user_id = #{member_id} AND u.use_yn = 'Y' AND sq.use_yn = 'Y'
+				GROUP BY sq.system_info_code)
+			</if>
+			
+			<if test="queue_code != null and !''.equals( queue_code ) ">	
+				AND (
+					SELECT owner_id
+					FROM service_processes_tbl sp2
+					WHERE sp2.request_id = rm.request_id AND sp2.use_yn = 'Y'
+					ORDER BY sp2.service_process_seq DESC
+					LIMIT 1) IN 
+					( SELECT qu.user_id 
+						FROM queue_user_tbl qu 
+						INNER JOIN user_tbl u ON qu.user_no = u.user_no
+						WHERE qu.queue_code = #{queue_code}
+						AND u.use_yn = 'Y'
+					)
+			</if>	
+			
+			<if test="owner_id != null and !''.equals(owner_id) ">
+				AND (
+					SELECT owner_id
+					FROM service_processes_tbl sp2
+					WHERE sp2.request_id = rm.request_id 
+					AND sp2.use_yn = 'Y'
+					ORDER BY sp2.service_process_seq DESC
+					LIMIT 1
+				) = #{owner_id}
+			</if>
+				AND  
+					( SELECT COUNT(*) FROM service_processes_tbl sp2 
+						WHERE sp.request_id = sp2.request_id AND sp2.admin_level_type_code = 'alt_06'
+					) > 0
+				
+				AND sp.service_process_seq = 0 
+				AND sp.date_created LIKE CONCAT( #{date_created} ,'-%')
+				
+				ORDER BY sp.request_id
+		) s 
+		GROUP BY s.system_info_code
+	</select>
+	
+	<select id="loadChart6" parameterType="SYCaseVo" resultType="SYCaseVo">
+		SELECT
+			SUM(cnt) AS cmd, 
+			CONCAT(ROUND((SUM(cnt) / COUNT(s.request_id)),1)) AS value1, 
+			s.*
+		FROM 
+		(
+			SELECT 
+				( SELECT owner_id 
+					FROM service_processes_tbl sp 
+					WHERE sp.request_id = rm.request_id AND sp.use_yn = 'Y'
+					ORDER BY sp.service_process_seq DESC LIMIT 1 
+				) AS n_owner_id, 
+				( SELECT owner_nm 
+					FROM service_processes_tbl sp 
+					WHERE sp.request_id = rm.request_id AND	sp.use_yn = 'Y'
+					ORDER BY sp.service_process_seq DESC LIMIT 1 
+				) AS n_owner_nm,   
+				(SELECT admin_level_type_nm FROM level_type_assign_master
+				WHERE admin_level_type_code = sp.admin_level_type_code) AS 'admin_level_type_nm', 
+				
+				(SELECT user_level_type_nm FROM level_type_assign_master
+				WHERE admin_level_type_code = sp.admin_level_type_code) AS 'user_level_type_nm', 
+				
+				( SELECT sp2.date_created FROM service_processes_tbl sp2 
+					WHERE sp.request_id = sp2.request_id AND sp2.admin_level_type_code = 'alt_06' AND sp2.service_process_seq != 0 ) AS st_dt, 
+				( SELECT sp2.date_created FROM service_processes_tbl sp2 
+					WHERE sp.request_id = sp2.request_id AND sp2.admin_level_type_code IN ('alt_07', 'alt_02') AND sp2.service_process_seq != 0 
+					ORDER BY (sp2.service_process_seq+0) DESC LIMIT 1) AS ed_dt, 	
+					
+				DATEDIFF(
+					( SELECT sp2.date_created FROM service_processes_tbl sp2 
+						WHERE sp.request_id = sp2.request_id AND sp2.admin_level_type_code IN ('alt_07', 'alt_02') AND sp2.service_process_seq != 0 
+						ORDER BY (sp2.service_process_seq+0) DESC LIMIT 1), 
+					( SELECT sp2.date_created FROM service_processes_tbl sp2 
+						WHERE sp.request_id = sp2.request_id AND sp2.admin_level_type_code = 'alt_06' AND sp2.service_process_seq != 0 ) 
+				) AS 'cnt',
+				
+				sp.date_created AS 'sp_date_created', 
+				sp.*
+			
+			FROM request_management_tbl rm
+			INNER JOIN service_processes_tbl sp 
+			ON rm.request_id = sp.request_id
+			
+			WHERE 
+				rm.use_yn = 'Y' AND sp.use_yn = 'Y' 
+			
+			<if test="member_id != null and !''.equals(member_id) ">
+				AND rm.system_info_code IN (
+				SELECT system_info_code
+				FROM system_queue_master sq
+				INNER JOIN queue_user_tbl qu ON sq.queue_code = qu.queue_code
+				INNER JOIN user_tbl u ON qu.user_no = u.user_no
+				WHERE u.user_id = #{member_id} AND u.use_yn = 'Y' AND sq.use_yn = 'Y'
+				GROUP BY sq.system_info_code)
+			</if>
+			
+			<if test="queue_code != null and !''.equals( queue_code ) ">	
+				AND (
+					SELECT owner_id
+					FROM service_processes_tbl sp2
+					WHERE sp2.request_id = rm.request_id AND sp2.use_yn = 'Y'
+					ORDER BY sp2.service_process_seq DESC
+					LIMIT 1) IN 
+					( SELECT qu.user_id 
+						FROM queue_user_tbl qu 
+						INNER JOIN user_tbl u ON qu.user_no = u.user_no
+						WHERE qu.queue_code = #{queue_code}
+						AND u.use_yn = 'Y'
+					)
+			</if>	
+			<!-- 
+			<if test="owner_id != null and !''.equals(owner_id) ">
+				AND (
+					SELECT owner_id
+					FROM service_processes_tbl sp2
+					WHERE sp2.request_id = rm.request_id 
+					AND sp2.use_yn = 'Y'
+					ORDER BY sp2.service_process_seq DESC
+					LIMIT 1
+				) = #{owner_id}
+			</if>
+			 -->
+				AND  
+					( SELECT COUNT(*) FROM service_processes_tbl sp2 
+						WHERE sp.request_id = sp2.request_id AND sp2.admin_level_type_code IN ('alt_07', 'alt_02')
+					) > 0
+				
+				AND sp.service_process_seq = 0 
+				AND sp.date_created LIKE CONCAT( #{date_created} ,'-%')
+				
+			ORDER BY sp.request_id
+		) s 
+		GROUP BY s.n_owner_id
+	</select>	
+	
+	<select id="selectReference_user" parameterType="SYCaseVo" resultType="SYCaseVo">
+		SELECT 
+			ru.request_id,
+			ru.user_no, ru.user_id,
+			u.user_nm, 
+			ru.date_created, ru.date_updated,
+			ru.creator, ru.updater
+		FROM reference_user_tbl ru
+		INNER JOIN user_tbl u
+			ON ru.user_no = u.user_no
+		WHERE 1=1
+		<if test="request_id != null and !''.equals( request_id )">
+			AND ru.request_id = #{request_id} 
+		</if>
+		ORDER BY u.user_nm ASC
+	</select>
+	
+	<!-- Reference Info User -->
+	<delete id="deleteReference_user_all" parameterType="SYCaseVo" >
+		DELETE FROM
+			reference_user_tbl
+		WHERE 
+			request_id = #{request_id}
+	</delete>
+	
+	<insert id="insertReference_user" parameterType="SYCaseVo">
+		INSERT INTO reference_user_tbl 
+		( 
+			request_id, user_no, user_id,
+			creator, updater, date_created, date_updated
+		)
+		VALUES
+		<foreach collection="list" item="element" separator=",">
+		( 
+			#{element.request_id}, #{element.user_no}, #{element.user_id}, 
+			#{element.creator}, #{element.updater}, current_timestamp(), current_timestamp()
+		)
+		</foreach>
+	</insert>
+	
+	
+	<!-- Partner Info User -->
+	<delete id="deletePartner_user_all" parameterType="SYCaseVo" >
+		DELETE FROM
+			partner_user_tbl
+		WHERE 
+			request_id = #{request_id} 
+		AND service_process_id = #{service_process_id}
+	</delete>
+	
+	<select id="selectPartner_user" parameterType="SYCaseVo" resultType="SYCaseVo">
+		SELECT 
+			u.user_no, 
+			request_id, service_process_id, service_process_seq, 
+			owner_id, owner_nm, partner_id, partner_nm, 
+			ptu.creator, ptu.updater, ptu.date_created, ptu.date_updated
+		FROM partner_user_tbl ptu
+		INNER JOIN user_tbl u ON u.user_id = ptu.partner_id
+		WHERE 
+			1=1
+		<if test="request_id != null and !''.equals(request_id) ">
+			AND request_id = #{request_id}
+		</if>
+		<if test="service_process_id != null and !''.equals(service_process_id) ">
+			AND service_process_id = #{service_process_id}
+		</if>
+		ORDER BY request_id, service_process_id, partner_nm ASC
+	</select>
+	
+	<insert id="insertPartner_user" parameterType="SYCaseVo">
+		INSERT INTO partner_user_tbl 
+		( 
+			request_id, service_process_id, service_process_seq, 
+			owner_id, owner_nm, partner_id, partner_nm, 
+			creator, updater, date_created, date_updated
+		)
+		VALUES
+		<foreach collection="list" item="element" separator=",">
+		( 
+			#{element.request_id}, #{element.service_process_id}, #{element.service_process_seq}, 
+			#{element.owner_id}, #{element.owner_nm}, #{element.partner_id}, #{element.partner_nm}, 
+			#{element.creator}, #{element.updater}, current_timestamp(), current_timestamp()
+		)
+		</foreach>
+	</insert>
+	
+	<select id="selectMailSendQueueUserList" parameterType="SYCaseVo" resultType="SYCaseVo">
+		SELECT 
+			sq.system_info_code, sq.use_yn, sq.email_yn, 
+			qu.queue_code, qu.user_no, 
+			u.* 
+		FROM user_tbl u 
+		INNER JOIN queue_user_tbl qu
+			ON u.user_no = qu.user_no
+		INNER JOIN system_queue_master sq
+			ON sq.queue_code = qu.queue_code
+		WHERE u.use_yn = 'Y' 
+			AND sq.use_yn = 'Y' AND sq.email_yn = 'Y'
+			AND sq.queue_code IN (SELECT sq.queue_code FROM 
+					system_queue_master sq
+					GROUP BY sq.queue_code)
+		<!-- 운영서버 조건 -->
+ 		AND u.company_gubun_code = #{company_gubun_code}
+ 		<!-- 개발서버 조건 -->
+<!-- 		AND u.user_id = #{user_id} -->
+		GROUP BY u.user_no
+	</select>
+	
+	<select id="selectSysInfoCountList" parameterType="SYCaseVo" resultType="SYCaseVo">
+		SELECT 
+			si.system_info_code, si.system_info_nm, si.system_info_descr, si.use_yn, 
+			IFNULL(sq.system_info_code, '') AS sq_syInfo, IFNULL(sq.queue_code, '') AS queue_code, 
+			COUNT(sp.request_id) AS value1, COUNT(sq.queue_code) AS value2, 
+			sp.request_id
+		FROM system_info_master si
+<!-- 		LEFT OUTER JOIN system_queue_master sq -->
+		INNER JOIN system_queue_master sq
+			ON sq.system_info_code = si.system_info_code
+			AND sq.queue_code 
+				IN ( SELECT qu.queue_code FROM queue_user_tbl qu WHERE qu.user_id IN ( #{user_id} ) )
+			AND sq.email_yn = 'Y' 
+			AND sq.use_yn = 'Y'
+		LEFT OUTER JOIN request_management_tbl rm 
+			ON rm.system_info_code = si.system_info_code
+			AND rm.use_yn = 'Y'
+			<!-- rm의 상태가 Hold가 아닌 값만 -->
+			AND rm.`status` != 'MD1257'
+			
+		LEFT OUTER JOIN service_processes_tbl sp
+			ON rm.request_id = sp.request_id 
+			AND sp.admin_level_type_code = 'alt_05' 
+			AND sp.service_process_seq = '0'
+			AND sp.use_yn = 'Y'
+		WHERE si.use_yn = 'Y'
+		GROUP BY si.system_info_code
+	</select>
+	
+	<!-- 단계별 건수 -->
+	<select id="stepCntSelect" parameterType="SYCaseDashBoardVo" resultType="SYCaseDashBoardVo">
+		SELECT  (SELECT admin_level_type_nm 
+		 FROM level_type_assign_master
+		 WHERE admin_level_type_code = a.admin_level_type_code) admin_level_type_nm
+		  ,COUNT(request_id) count FROM service_processes_tbl a
+		 WHERE  a.service_process_seq =0 and a.use_yn = 'Y'
+		GROUP BY admin_level_type_code
+	</select>
+	
+<!-- 	단계별 평균 공수 -->
+	<select id="stepAverageSelect" parameterType="SYCaseDashBoardVo" resultType="SYCaseDashBoardVo">
+		SELECT admin_level_type_nm, round(SUM(leadtime)/count(request_id),1) AS avgtime FROM (
+		SELECT request_id,title,admin_level_type_code,(select code_nm FROM sy_code_detail WHERE  detail_code = a.status)  AS code_nm,   owner_nm, (SELECT admin_level_type_nm 
+		 FROM level_type_assign_master
+		 WHERE admin_level_type_code = a.admin_level_type_code) as admin_level_type_nm,
+		 (SELECT control_type_nm FROM control_type_master
+		  WHERE control_type_code =a.control_gubun) AS control_type_nm,
+		 process_date  AS request_Date , 
+		 datediff(date_updated,process_date) - (floor(datediff(date_updated,process_date)/6) + floor(datediff(date_updated,process_date)/7))+1  AS leadtime 
+		  FROM service_processes_tbl a
+		WHERE a.service_process_seq =0 and a.use_yn = 'Y'
+		) c  GROUP BY c.admin_level_type_nm
+ 
+	</select>
+	
+<!-- 	단계별 건수, 단계별 평균 공수 상세 -->
+	<select id="stepDtlSelect" parameterType="SYCaseDashBoardVo" resultType="SYCaseDashBoardVo">
+	SELECT request_seq as request_id, 
+	( SELECT request_type_nm FROM request_type_master rt ,request_management_tbl rm
+	WHERE request_id = a.request_id and rt.request_type_code = rm.request_type) AS request_type_nm,
+	( SELECT owner_nm FROM service_processes_tbl sp2 WHERE sp2.request_id = rm.request_id AND sp2.use_yn = 'Y'
+	 AND sp2.service_process_seq != 0 ORDER BY sp2.service_process_seq DESC LIMIT 1) AS n_owner_nm,  
+	a.title,(select code_nm FROM sy_code_detail WHERE  detail_code = a.status)  AS code_nm,   owner_nm, (SELECT admin_level_type_nm 
+	 FROM level_type_assign_master
+	 WHERE admin_level_type_code = a.admin_level_type_code) as admin_level_type_nm,
+	 (SELECT system_info_nm FROM request_management_tbl b ,system_info_master d  WHERE request_id =a.request_id AND b.system_info_code =d.system_info_code) as system_info_nm,
+	 (SELECT control_type_nm FROM control_type_master
+	  WHERE control_type_code =a.control_gubun) AS control_type_nm,
+	 process_date  AS request_Date , 
+	 datediff(a.date_updated,process_date) - (floor(datediff(a.date_updated,process_date)/6) + floor(datediff(a.date_updated,process_date)/7))+1  AS leadtime 
+	  FROM service_processes_tbl a left outer join request_management_tbl rm on a.request_id = rm.request_id
+	WHERE a.service_process_seq =0 and a.use_yn='Y' and (SELECT admin_level_type_nm FROM level_type_assign_master
+	 WHERE admin_level_type_code = a.admin_level_type_code)= #{admin_level_type_nm}
+	</select>
+	
+<!-- 	주간 Case 발생  -->
+	<select id="weekOccurSelect" parameterType="SYCaseDashBoardVo" resultType="SYCaseDashBoardVo">
+	    SELECT 
+		  DATE_FORMAT(
+		    DATE_SUB(
+		      `date_created`,
+		      INTERVAL (DAYOFWEEK(`date_created`) - 1) DAY
+		    ),
+		    '%Y-%m-%d'
+		  ) AS START,
+		  DATE_FORMAT(
+		    DATE_SUB(
+		      `date_created`,
+		      INTERVAL (DAYOFWEEK(`date_created`) - 7) DAY
+		    ),
+		    '%Y-%m-%d'
+		  ) AS 
+		END,
+		DATE_FORMAT(`date_created`, '%Y%U') AS `date`,
+		(SELECT admin_level_type_nm 
+		 FROM level_type_assign_master
+		 WHERE admin_level_type_code = a.admin_level_type_code) admin_level_type_nm
+		  ,COUNT(request_id) count
+		FROM
+		  service_processes_tbl a WHERE a.service_process_seq =0 and a.use_yn = 'Y'
+		GROUP BY DATE ORDER BY START DESC LIMIT 6;
+	</select>
+	
+<!-- 	주간 Case 완료 -->
+	<select id="weekCmpSelect" parameterType="SYCaseDashBoardVo" resultType="SYCaseDashBoardVo">
+		 SELECT * FROM (
+		  SELECT 
+		  DATE_FORMAT(
+		    DATE_SUB(
+		      `date_updated`,
+		      INTERVAL (DAYOFWEEK(`date_updated`) - 1) DAY
+		    ),
+		    '%Y-%m-%d'
+		  ) AS START,
+		  DATE_FORMAT(
+		    DATE_SUB(
+		      `date_updated`,
+		      INTERVAL (DAYOFWEEK(`date_updated`) - 7) DAY
+		    ),
+		    '%Y-%m-%d'
+		  ) AS 
+		END,
+		DATE_FORMAT(`date_updated`, '%Y%U') AS `date`,
+		(SELECT admin_level_type_nm 
+		 FROM level_type_assign_master
+		 WHERE admin_level_type_code = a.admin_level_type_code) as admin_level_type_nm
+		  ,COUNT(request_id) as count
+		FROM
+		  service_processes_tbl a WHERE a.service_process_seq =0 and a.use_yn = 'Y' AND a.status IN ('MD1258') AND a.admin_level_type_code IN( 'alt_02','alt_07')
+		GROUP BY DATE   
+		) c ORDER BY START DESC LIMIT 6
+	</select>
+	
+<!-- 	주간 Case 발생 상세 -->
+	<select id="weekOccurDtlSelect" parameterType="SYCaseDashBoardVo" resultType="SYCaseDashBoardVo">
+		 SELECT request_seq as request_id, a.title,
+		 ( SELECT request_type_nm FROM request_type_master rt ,request_management_tbl rm
+			WHERE request_id = a.request_id and rt.request_type_code = rm.request_type) AS request_type_nm,(select code_nm FROM sy_code_detail WHERE  detail_code = a.status)  AS code_nm,   owner_nm,
+			( SELECT owner_nm 
+				FROM service_processes_tbl sp2 
+				WHERE sp2.request_id = rm.request_id AND sp2.use_yn = 'Y'
+				AND sp2.service_process_seq != 0
+				ORDER BY sp2.service_process_seq DESC LIMIT 1 
+			) AS n_owner_nm,  (SELECT admin_level_type_nm 
+			 FROM level_type_assign_master
+			 WHERE admin_level_type_code = a.admin_level_type_code) as admin_level_type_nm,
+			 (SELECT system_info_nm FROM request_management_tbl b ,system_info_master d  WHERE request_id =a.request_id AND b.system_info_code =d.system_info_code) as system_info_nm,
+			 (SELECT control_type_nm FROM control_type_master
+			  WHERE control_type_code =a.control_gubun) AS control_type_nm,
+			 process_date  AS request_Date ,
+			 datediff(a.date_updated,process_date) - (floor(datediff(a.date_updated,process_date)/6) + floor(datediff(a.date_updated,process_date)/7))+1  AS leadtime 
+			  FROM service_processes_tbl a left outer join request_management_tbl rm on a.request_id = rm.request_id
+			WHERE a.service_process_seq =0 and a.use_yn = 'Y' AND a.date_created BETWEEN #{start_date} AND #{end_date}
+	</select>
+	
+<!-- 	주간 Case 완료 상세 -->
+	<select id="weekCmpDtlSelect" parameterType="SYCaseDashBoardVo" resultType="SYCaseDashBoardVo">
+		 SELECT request_seq as request_id,a.title,
+		 ( SELECT request_type_nm FROM request_type_master rt ,request_management_tbl rm
+			WHERE request_id = a.request_id and rt.request_type_code = rm.request_type) AS request_type_nm,(select code_nm FROM sy_code_detail WHERE  detail_code = a.status)  AS code_nm,   owner_nm,
+			( SELECT owner_nm 
+				FROM service_processes_tbl sp2 
+				WHERE sp2.request_id = rm.request_id AND sp2.use_yn = 'Y'
+				AND sp2.service_process_seq != 0
+				ORDER BY sp2.service_process_seq DESC LIMIT 1 
+			) AS n_owner_nm, (SELECT admin_level_type_nm 
+			 FROM level_type_assign_master
+			 WHERE admin_level_type_code = a.admin_level_type_code) as admin_level_type_nm,
+			 (SELECT system_info_nm FROM request_management_tbl b ,system_info_master d  WHERE request_id =a.request_id AND b.system_info_code =d.system_info_code) as system_info_nm,
+			 (SELECT control_type_nm FROM control_type_master
+			  WHERE control_type_code =a.control_gubun) AS control_type_nm,
+			 process_date  AS request_Date , 
+			 datediff(a.date_updated,process_date) - (floor(datediff(a.date_updated,process_date)/6) + floor(datediff(a.date_updated,process_date)/7))+1  AS leadtime 
+			  FROM service_processes_tbl a left outer join request_management_tbl rm on a.request_id = rm.request_id
+			WHERE a.service_process_seq =0 and a.use_yn = 'Y' AND a.status IN ('MD1258') AND a.admin_level_type_code IN( 'alt_02','alt_07')
+			AND a.date_updated BETWEEN #{start_date} AND #{end_date}
+	</select>
+	
+<!-- 	시스템 별 주간 Case 발생 -->
+	<select id="systemWeekOccurSelect" parameterType="SYCaseDashBoardVo" resultType="SYCaseDashBoardVo">
+		   SELECT 
+			  DATE_FORMAT(
+			    DATE_SUB(
+			      `date_created`,
+			      INTERVAL (DAYOFWEEK(`date_created`) - 1) DAY
+			    ),
+			    '%Y-%m-%d'
+			  ) AS START,
+			  DATE_FORMAT(
+			    DATE_SUB(
+			      `date_created`,
+			      INTERVAL (DAYOFWEEK(`date_created`) - 7) DAY
+			    ),
+			    '%Y-%m-%d'
+			  ) AS 
+			END,
+			DATE_FORMAT(`date_created`, '%Y%U') AS `date`,
+			(SELECT admin_level_type_nm 
+			 FROM level_type_assign_master
+			 WHERE admin_level_type_code = a.admin_level_type_code) as admin_level_type_nm,
+			 (SELECT system_info_nm FROM request_management_tbl b ,system_info_master d  WHERE request_id =a.request_id AND b.system_info_code =d.system_info_code) as system_info_nm
+			  ,COUNT(request_id) as count
+			FROM
+			  service_processes_tbl a WHERE a.service_process_seq =0 and a.use_yn = 'Y'
+			GROUP BY DATE ,(SELECT system_info_code FROM request_management_tbl WHERE request_id =a.request_id)
+	</select>
+	
+<!-- 	시스템 별 주간 Case 발생 상세 -->
+	<select id="systemWeekOccurDtlSelect" parameterType="SYCaseDashBoardVo" resultType="SYCaseDashBoardVo">
+		   SELECT request_seq as request_id,a.title,
+		   ( SELECT request_type_nm FROM request_type_master rt ,request_management_tbl rm
+			WHERE request_id = a.request_id and rt.request_type_code = rm.request_type) AS request_type_nm,
+			(select code_nm FROM sy_code_detail WHERE  detail_code = a.status)  AS code_nm,   owner_nm,
+			( SELECT owner_nm 
+				FROM service_processes_tbl sp2 
+				WHERE sp2.request_id = rm.request_id AND sp2.use_yn = 'Y'
+				AND sp2.service_process_seq != 0
+				ORDER BY sp2.service_process_seq DESC LIMIT 1 
+			) AS n_owner_nm,
+			(SELECT admin_level_type_nm 
+			 FROM level_type_assign_master
+			 WHERE admin_level_type_code = a.admin_level_type_code) as admin_level_type_nm,
+			 (SELECT system_info_nm FROM request_management_tbl b ,system_info_master d  WHERE request_id =a.request_id AND b.system_info_code =d.system_info_code) as system_info_nm,
+			 (SELECT control_type_nm FROM control_type_master
+			  WHERE control_type_code =a.control_gubun) AS control_type_nm,
+			 process_date  AS request_Date ,
+			 datediff(a.date_updated,process_date) - (floor(datediff(a.date_updated,process_date)/6) + floor(datediff(a.date_updated,process_date)/7))+1  AS leadtime 
+			  FROM service_processes_tbl a left outer join request_management_tbl rm on a.request_id = rm.request_id
+			WHERE a.service_process_seq =0 and a.use_yn = 'Y' AND a.date_created BETWEEN #{start_date} AND #{end_date} and 
+			(SELECT system_info_nm FROM request_management_tbl b ,system_info_master d
+			WHERE request_id =a.request_id AND b.system_info_code =d.system_info_code) like CONCAT(#{system_info_nm}, '%')
+	</select>
+	
+<!-- 	시스템 별 주간 Case 완료 -->
+	<select id="systemWeekCmpSelect" parameterType="SYCaseDashBoardVo" resultType="SYCaseDashBoardVo">
+		 SELECT * FROM (
+		  SELECT 
+		  DATE_FORMAT(
+		    DATE_SUB(
+		      `date_updated`,
+		      INTERVAL (DAYOFWEEK(`date_updated`) - 1) DAY
+		    ),
+		    '%Y-%m-%d'
+		  ) AS START,
+		  DATE_FORMAT(
+		    DATE_SUB(
+		      `date_updated`,
+		      INTERVAL (DAYOFWEEK(`date_updated`) - 7) DAY
+		    ),
+		    '%Y-%m-%d'
+		  ) AS 
+		END,
+		DATE_FORMAT(`date_updated`, '%Y%U') AS `date`,
+		(SELECT admin_level_type_nm 
+		 FROM level_type_assign_master
+		 WHERE admin_level_type_code = a.admin_level_type_code) as admin_level_type_nm,
+		 (SELECT system_info_nm FROM request_management_tbl b ,system_info_master d  WHERE request_id =a.request_id AND b.system_info_code =d.system_info_code) as system_info_nm 
+		  ,COUNT(request_id) as count
+		FROM
+		  service_processes_tbl a WHERE a.service_process_seq =0 and a.use_yn = 'Y' AND a.status IN ('MD1258') AND a.admin_level_type_code IN( 'alt_02','alt_07')
+		GROUP BY DATE   ,(SELECT system_info_code FROM request_management_tbl WHERE request_id =a.request_id)  
+		) c ORDER BY  START DESC LIMIT 20
+	</select>
+	
+<!-- 	시스템 별 주간 Case 완료 상세 -->
+	<select id="systemWeekCmpDtlSelect" parameterType="SYCaseDashBoardVo" resultType="SYCaseDashBoardVo">
+		 SELECT request_seq as request_id,a.title,
+		 ( SELECT request_type_nm FROM request_type_master rt ,request_management_tbl rm
+			WHERE request_id = a.request_id and rt.request_type_code = rm.request_type) AS request_type_nm,
+			(select code_nm FROM sy_code_detail WHERE  detail_code = a.status)  AS code_nm,   owner_nm,
+			( SELECT owner_nm 
+				FROM service_processes_tbl sp2 
+				WHERE sp2.request_id = rm.request_id AND sp2.use_yn = 'Y'
+				AND sp2.service_process_seq != 0
+				ORDER BY sp2.service_process_seq DESC LIMIT 1 
+			) AS n_owner_nm, (SELECT admin_level_type_nm 
+			 FROM level_type_assign_master
+			 WHERE admin_level_type_code = a.admin_level_type_code) as admin_level_type_nm,
+			 (SELECT system_info_nm FROM request_management_tbl b ,system_info_master d
+						WHERE request_id =a.request_id AND b.system_info_code =d.system_info_code) as system_info_nm,
+			 (SELECT control_type_nm FROM control_type_master
+			  WHERE control_type_code =a.control_gubun) AS control_type_nm,
+			 process_date  AS request_Date , 
+			 datediff(a.date_updated,process_date) - (floor(datediff(a.date_updated,process_date)/6) + floor(datediff(a.date_updated,process_date)/7))+1  AS leadtime 
+			  FROM service_processes_tbl a left outer join request_management_tbl rm on a.request_id = rm.request_id
+			WHERE a.service_process_seq =0 and a.use_yn = 'Y' AND a.status IN ('MD1258') AND a.admin_level_type_code IN( 'alt_02','alt_07')
+			AND a.date_updated BETWEEN #{start_date} AND #{end_date} and 
+			(SELECT system_info_nm FROM request_management_tbl b ,system_info_master d
+			WHERE request_id =a.request_id AND b.system_info_code =d.system_info_code) like CONCAT(#{system_info_nm}, '%')
+	</select>
+	
+<!-- 	시스템 별 분기 평균 처리 공수 -->
+	<select id="systemQuarterSelect" parameterType="SYCaseDashBoardVo" resultType="SYCaseDashBoardVo">
+		SELECT qu  AS quarter, system_info_nm,  round(SUM(leadtime)/COUNT(system_info_nm),0) AS count  FROM(
+			SELECT request_id,title,(select code_nm FROM sy_code_detail WHERE  detail_code = a.status)  AS code_nm,   owner_nm, (SELECT admin_level_type_nm 
+			 FROM level_type_assign_master
+			 WHERE admin_level_type_code = a.admin_level_type_code) as admin_level_type_nm,
+			 (SELECT control_type_nm FROM control_type_master
+			  WHERE control_type_code =a.control_gubun) AS control_type_nm,
+			 process_date  AS request_Date , QUARTER(date_updated) AS qu, 
+			 (SELECT system_info_nm FROM request_management_tbl b ,system_info_master d  WHERE request_id =a.request_id AND b.system_info_code =d.system_info_code) AS system_info_nm  ,
+			 datediff(date_updated,process_date) - (floor(datediff(date_updated,process_date)/6) + floor(datediff(date_updated,process_date)/7))+1  AS leadtime 
+			  FROM service_processes_tbl a
+			WHERE a.service_process_seq =0 and a.use_yn = 'Y' AND a.status IN ('MD1258') AND a.admin_level_type_code IN( 'alt_02','alt_07')
+			) e GROUP BY qu ,  system_info_nm
+<!-- 			) e where qu <![CDATA[ <> ]]> '1' GROUP BY qu ,  system_info_nm -->
+	</select>
+	
+<!-- 	시스템 별 분기 평균 처리 공수 상세 -->
+	<select id="systemQuarterDtlSelect" parameterType="SYCaseDashBoardVo" resultType="SYCaseDashBoardVo">
+		SELECT request_seq as request_id,
+		( SELECT request_type_nm FROM request_type_master rt ,request_management_tbl rm
+		WHERE request_id = a.request_id and rt.request_type_code = rm.request_type) AS request_type_nm, QUARTER(a.date_updated) AS quarter, a.title,(select code_nm FROM sy_code_detail WHERE  detail_code = a.status)  AS code_nm,   owner_nm, 
+		( SELECT owner_nm 
+				FROM service_processes_tbl sp2 
+				WHERE sp2.request_id = rm.request_id AND sp2.use_yn = 'Y'
+				AND sp2.service_process_seq != 0
+				ORDER BY sp2.service_process_seq DESC LIMIT 1 
+			) AS n_owner_nm, (SELECT admin_level_type_nm 
+		 FROM level_type_assign_master
+		 WHERE admin_level_type_code = a.admin_level_type_code) as admin_level_type_nm,
+		 (SELECT control_type_nm FROM control_type_master
+		  WHERE control_type_code =a.control_gubun) AS control_type_nm,
+		 process_date  AS request_Date ,
+		 (SELECT system_info_nm FROM request_management_tbl b ,system_info_master d  WHERE request_id =a.request_id AND b.system_info_code =d.system_info_code) AS system_info_nm  ,
+		 datediff(a.date_updated,process_date) - (floor(datediff(a.date_updated,process_date)/6) + floor(datediff(a.date_updated,process_date)/7))+1  AS leadtime 
+		  FROM service_processes_tbl a left outer join request_management_tbl rm on a.request_id = rm.request_id
+		WHERE a.service_process_seq =0 and a.use_yn = 'Y' AND a.status IN ('MD1258') AND a.admin_level_type_code IN( 'alt_02','alt_07')
+		AND QUARTER(a.date_updated) = #{quarter} AND
+		(SELECT system_info_nm FROM request_management_tbl b ,system_info_master d 
+		WHERE request_id =a.request_id AND b.system_info_code =d.system_info_code) like CONCAT(#{system_info_nm}, '%')
+	</select>
+	
+<!-- 	통제분류별 주간 평균 처리 공수 -->
+	<select id="ctrlWeekSelect" parameterType="SYCaseDashBoardVo" resultType="SYCaseDashBoardVo">
+		 SELECT  START,END,DATE,control_type_nm,round(SUM(leadtime)/ request_id ,0) AS count FROM (
+			  SELECT 
+			  DATE_FORMAT(
+			    DATE_SUB(
+			      `date_updated`,
+			      INTERVAL (DAYOFWEEK(`date_updated`) - 1) DAY
+			    ),
+			    '%Y-%m-%d'
+			  ) AS START,
+			  DATE_FORMAT(
+			    DATE_SUB(
+			      `date_updated`,
+			      INTERVAL (DAYOFWEEK(`date_updated`) - 7) DAY
+			    ),
+			    '%Y-%m-%d'
+			  ) AS 
+			END,
+			DATE_FORMAT(`date_updated`, '%Y%U') AS `date`,
+			(SELECT control_type_nm FROM control_type_master
+			  WHERE control_type_code =a.control_gubun) AS control_type_nm
+			  ,  COUNT(request_id) AS request_id,
+			 datediff(date_updated,process_date) - (floor(datediff(date_updated,process_date)/6) + floor(datediff(date_updated,process_date)/7))+1  AS leadtime 
+			FROM
+			  service_processes_tbl a WHERE a.service_process_seq =0 and a.use_yn = 'Y' AND a.status IN ('MD1258') AND a.admin_level_type_code IN( 'alt_02','alt_07')
+			GROUP BY DATE   ,(SELECT control_type_nm FROM control_type_master
+			  WHERE control_type_code =a.control_gubun)
+			) c    WHERE substring(END,6,2) =    DATE_FORMAT( NOW(), '%m' )
+			 GROUP BY DATE  ,control_type_nm        
+	</select>
+<!-- 	통제분류별 주간 평균 처리 공수 상세 -->
+	<select id="ctrlWeekDtlSelect" parameterType="SYCaseDashBoardVo" resultType="SYCaseDashBoardVo">
+		SELECT request_seq as request_id, a.title,
+		( SELECT request_type_nm FROM request_type_master rt ,request_management_tbl rm
+		WHERE request_id = a.request_id and rt.request_type_code = rm.request_type) AS request_type_nm,
+		(select code_nm FROM sy_code_detail WHERE  detail_code = a.status)  AS code_nm,   owner_nm,
+		( SELECT owner_nm 
+				FROM service_processes_tbl sp2 
+				WHERE sp2.request_id = rm.request_id AND sp2.use_yn = 'Y'
+				AND sp2.service_process_seq != 0
+				ORDER BY sp2.service_process_seq DESC LIMIT 1 
+			) AS n_owner_nm, (SELECT admin_level_type_nm 
+		 FROM level_type_assign_master
+		 WHERE admin_level_type_code = a.admin_level_type_code) as admin_level_type_nm,
+		 (SELECT control_type_nm FROM control_type_master
+		  WHERE control_type_code =a.control_gubun) AS control_type_nm,
+		 a.date_updated  AS step_date ,
+		 (SELECT system_info_nm FROM request_management_tbl b ,system_info_master d  WHERE request_id =a.request_id AND b.system_info_code =d.system_info_code) AS system_info_nm  ,
+		 datediff(a.date_updated,process_date) - (floor(datediff(a.date_updated,process_date)/6) + floor(datediff(a.date_updated,process_date)/7))+1  AS leadtime 
+		  FROM service_processes_tbl a left outer join request_management_tbl rm on a.request_id = rm.request_id
+		WHERE a.service_process_seq =0 and a.use_yn = 'Y' AND a.status IN ('MD1258') AND a.admin_level_type_code IN( 'alt_02','alt_07')
+		 and substring(a.date_updated,6,2) =    DATE_FORMAT( NOW(), '%m' ) and a.date_updated BETWEEN #{start_date} AND #{end_date} and
+	  (SELECT control_type_nm FROM control_type_master WHERE control_type_code =a.control_gubun) = #{control_type_nm}
+	</select>
+	
+<!-- 	case 소요시간 -->
+	<select id="caseAverageTime" parameterType="SYCaseDashBoardVo" resultType="SYCaseDashBoardVo">
+		SELECT round(SUM(leadtime)/COUNT(request_id),1) AS avgtime  FROM (
+			SELECT *, PERCENT_RANK() over (order by leadtime) as ranking   FROM (
+			SELECT request_id,   title,(select code_nm FROM sy_code_detail WHERE  detail_code = a.status)  AS code_nm,   owner_nm, (SELECT admin_level_type_nm 
+			 FROM level_type_assign_master
+			 WHERE admin_level_type_code = a.admin_level_type_code) as admin_level_type_nm,
+			 (SELECT control_type_nm FROM control_type_master
+			  WHERE control_type_code =a.control_gubun) AS control_type_nm,
+			 date_updated  AS step_date ,
+			 (SELECT system_info_nm FROM request_management_tbl b ,system_info_master d  WHERE request_id =a.request_id AND b.system_info_code =d.system_info_code) AS system_info_nm  ,
+			 datediff(date_updated,process_date) - (floor(datediff(date_updated,process_date)/6) + floor(datediff(date_updated,process_date)/7))+1  AS leadtime 
+			  FROM service_processes_tbl a
+			WHERE a.service_process_seq =0 and a.use_yn = 'Y' AND a.status IN ('MD1258') AND a.admin_level_type_code IN( 'alt_02','alt_07')
+			 ) c ) e  WHERE ranking >0.39 AND ranking <![CDATA[ < ]]>0.91
+	</select>
+	
+	<select id="maxRequestSeq" parameterType="SYCaseVo" resultType="int">
+		SELECT MAX(request_seq) AS request_seq FROM service_processes_tbl
+		WHERE 1=1
+		<if test="request_id != null and !''.equals( request_id )">
+			AND request_id LIKE CONCAT('%', #{request_id}, '%') 
+		</if>
+	</select>
+	
+</mapper>
