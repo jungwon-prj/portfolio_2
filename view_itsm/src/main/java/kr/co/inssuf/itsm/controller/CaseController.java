@@ -191,6 +191,53 @@ AndView = new ModelAndView();
 		return resultData.toJSONString();
 	}
 	
+	@ResponseBody
+	@RequestMapping(value = "/selectQueueMember", method = {RequestMethod.GET, RequestMethod.POST}, produces="application/json;charset=UTF-8")
+	@SuppressWarnings("unchecked")
+	public String selectQueueMember(@ModelAttribute SYCaseVo vo, HttpServletRequest request, HttpServletResponse response, HttpSession session) {
+		logger.debug("CaseController.selectQueueMember() is called.");
+		JSONObject resultData = new JSONObject();
+		JSONArray listDataJArray = new JSONArray();
+		try {
+			JSONParser jsonParser = new JSONParser();
+			
+			List<SYCaseVo> listSvcPrss = syCaseService.selectQueueMember(vo);
+			
+			String listDataJsonString = ResponseUtils.getJsonResponse(response, listSvcPrss);
+			listDataJArray = (JSONArray) jsonParser.parse(listDataJsonString);
+			resultData.put("status", HttpStatus.OK.value());
+			resultData.put("rows", listDataJArray);
+		} catch(Exception e) {
+			e.printStackTrace();
+			resultData.put("status", HttpStatus.INTERNAL_SERVER_ERROR.value());
+			resultData.put("rows", null);
+		}
+		return resultData.toJSONString();
+	}
+	
+	// /admin/apprCancelCase
+	@SuppressWarnings("unchecked")
+	@ResponseBody
+	@RequestMapping(value = "/admin/apprCancelCase", method = { RequestMethod.GET, RequestMethod.POST }, produces = "application/json; charset=utf-8")
+	public String apprCancelCase(@ModelAttribute SYCaseVo vo, HttpServletRequest request) {
+		logger.debug("CaseController.apprCancelCase() is called.");
+		JSONObject resultData = new JSONObject();
+		int result = 0;
+		try {
+			vo.setUpdater(SessionUtil.getMemberId(request));
+			result = syCaseService.apprCancelCase(vo);
+			if (result < 0) {
+				resultData.put("status", HttpStatus.INTERNAL_SERVER_ERROR.value());
+			} else {
+				resultData.put("status", HttpStatus.OK.value());
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+			resultData.put("status", HttpStatus.INTERNAL_SERVER_ERROR.value());
+		}
+		return resultData.toJSONString();
+	}
+	
 	// 맞추자
 	// insertCase
 	@ResponseBody
@@ -320,6 +367,106 @@ AndView = new ModelAndView();
 			resultData.put("division", "detail");
 			resultData.put("error_msg", error_msg);
 			resultData.put("request_seq", result);
+			resultData.put("status", HttpStatus.OK.value());
+		} catch(Exception e) {
+			e.printStackTrace();
+			resultData.put("status", HttpStatus.INTERNAL_SERVER_ERROR.value());
+		}
+		return resultData.toJSONString(); 
+	}
+	
+	@ResponseBody
+	@RequestMapping(value = "/admin/insertPartnerCase", method = {RequestMethod.GET, RequestMethod.POST}, produces="application/json;charset=UTF-8")
+	@SuppressWarnings("unchecked")
+	public String insertPartnerCase(@ModelAttribute SYCaseVo vo, HttpServletRequest request, HttpServletResponse response, HttpSession session) {
+		logger.debug("CaseController.insertPartnerCase() is called.");
+		vo.setCreator(SessionUtil.getMemberId(request));
+		vo.setUpdater(SessionUtil.getMemberId(request));
+		JSONObject resultData = new JSONObject();
+		
+		JSONArray jsonArray = new JSONArray();
+		JSONParser parser = new JSONParser();
+		try{
+			SimpleDateFormat formatter_yyyy = new SimpleDateFormat("yyyy");
+			SimpleDateFormat formatter_mm = new SimpleDateFormat("MM");
+			SimpleDateFormat formatter_dd = new SimpleDateFormat("dd");
+			String yyyy= formatter_yyyy.format(new java.util.Date());
+			String mm= formatter_mm.format(new java.util.Date());
+			String dd= formatter_dd.format(new java.util.Date());
+			String file_cate = "froala";
+			String error_msg = "";
+			
+			String strDir = fsResource.getPath() +"/"+ file_cate +"/"+yyyy+"/"+mm+"/"+dd+"/";
+			
+			File d = new File(strDir);
+			
+			if(!d.isDirectory()) {
+				d.mkdirs();
+			}
+			String fileExt = "png";
+			String frData = request.getParameter("frData");
+			
+			String[] imgSplit = frData.split("src=\"");
+			
+			for(int i=1; i<imgSplit.length; i++) {
+				String o_path = imgSplit[i].substring(0, imgSplit[i].indexOf("\""));
+				System.out.println("imgSplit["+i+"].substring = " + o_path );
+				
+				if(o_path.contains("/file/attach_download")){
+					System.out.println("이미 등록된 값");
+				} else {
+					System.out.println("등록안된 값");
+					
+					UUID uid = UUID.randomUUID();
+					String c_path = strDir + "_"+uid+"."+fileExt; 
+					String file_path = file_cate +"/" + yyyy+"/"+mm+"/"+dd+"/"+"_"+uid+"."+fileExt;
+					
+					File localFile = new File(c_path);
+					
+					String base_64_prefix = "data:image/png;base64,";
+					String base_64_prefix2 = ";base64,";
+					System.out.println("base_64_prefix2 = " + base_64_prefix2);
+					byte[] o_path_byte = decodeBase64ToBytes(o_path, base_64_prefix2);
+					
+					Files.copy( new ByteArrayInputStream(o_path_byte), localFile.toPath() );
+					
+					SYFileVo fVo = new SYFileVo();
+					String file_group = syFileService.selectFileKey();
+					
+					fVo.setFile_group(file_group);
+					fVo.setFile_repo("1");
+					fVo.setFile_cate(file_cate);
+					fVo.setFile_path(file_path); 
+					fVo.setFile_name("fileName."+fileExt);
+					fVo.setFile_ext(fileExt);
+					fVo.setFile_del_yn("N");
+					fVo.setFile_size((localFile.length() / 1024));
+					fVo.setCreator(SessionUtil.getMemberId(request));
+					fVo.setUpdater(SessionUtil.getMemberId(request));
+					int result = syFileService.insertFile(fVo);
+					System.out.println("result = "+result);
+					
+					int idx = frData.indexOf(o_path);
+					System.out.println("idx = " + idx);
+					System.out.println("frData = " + frData);
+					
+					frData = frData.replace(o_path, "/file/attach_download2?file_group="+file_group );
+				}
+			}
+			vo.setContext(frData);
+			// service_processes_tbl
+//			vo.setOwner_id(SessionUtil.getMemberId(request));
+//			vo.setOwner_nm(SessionUtil.getMemberNm(request));
+			
+			// ★
+			int result = 0;
+			
+			String cmd = vo.getCmd();
+			
+			result = syCaseService.insertPartnerCase(vo);
+			
+			resultData.put("division", "detail");
+			resultData.put("error_msg", error_msg);
 			resultData.put("status", HttpStatus.OK.value());
 		} catch(Exception e) {
 			e.printStackTrace();
@@ -626,6 +773,54 @@ AndView = new ModelAndView();
 		} catch (Exception e) {
 			e.printStackTrace();
 			resultData.put("status", HttpStatus.INTERNAL_SERVER_ERROR.value());
+		}
+		return resultData.toJSONString();
+	}
+	
+	@ResponseBody
+	@RequestMapping(value = "/admin/selectHeader", method = {RequestMethod.GET, RequestMethod.POST}, produces="application/json;charset=UTF-8")
+	@SuppressWarnings("unchecked")
+	public String selectHeader(@ModelAttribute SYCaseVo vo, HttpServletRequest request, HttpServletResponse response, HttpSession session) {
+		logger.debug("CaseController.selectHeader() is called.");
+		JSONObject resultData = new JSONObject();
+		JSONArray listDataJArray = new JSONArray();
+		try {
+			JSONParser jsonParser = new JSONParser();
+			
+			List<SYCaseVo> listSvcPrss = syCaseService.selectHeader(vo);
+			
+			String listDataJsonString = ResponseUtils.getJsonResponse(response, listSvcPrss);
+			listDataJArray = (JSONArray) jsonParser.parse(listDataJsonString);
+			resultData.put("status", HttpStatus.OK.value());
+	    resultData.put("rows", listDataJArray);
+		} catch(Exception e) {
+			e.printStackTrace();
+			resultData.put("status", HttpStatus.INTERNAL_SERVER_ERROR.value());
+	    resultData.put("rows", null);
+		}
+		return resultData.toJSONString();
+	}
+	
+	@ResponseBody
+	@RequestMapping(value = "/admin/selectSub", method = {RequestMethod.GET, RequestMethod.POST}, produces="application/json;charset=UTF-8")
+	@SuppressWarnings("unchecked")
+	public String selectSub(@ModelAttribute SYCaseVo vo, HttpServletRequest request, HttpServletResponse response, HttpSession session) {
+		logger.debug("CaseController.selectSub() is called.");
+		JSONObject resultData = new JSONObject();
+		JSONArray listDataJArray = new JSONArray();
+		try {
+			JSONParser jsonParser = new JSONParser();
+			
+			List<SYCaseVo> listSvcPrss = syCaseService.selectSub(vo);
+			
+			String listDataJsonString = ResponseUtils.getJsonResponse(response, listSvcPrss);
+			listDataJArray = (JSONArray) jsonParser.parse(listDataJsonString);
+			resultData.put("status", HttpStatus.OK.value());
+	    resultData.put("rows", listDataJArray);
+		} catch(Exception e) {
+			e.printStackTrace();
+			resultData.put("status", HttpStatus.INTERNAL_SERVER_ERROR.value());
+	    resultData.put("rows", null);
 		}
 		return resultData.toJSONString();
 	}
