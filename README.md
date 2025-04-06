@@ -1,4 +1,5 @@
 # portfolio_2
+ITSM에서 단계별 case관리 화면과 데이터를 날짜별로 쉽게 확인할 수 있는 대시보드입니다. <br>
 
 itss_dashboard.pptx => view_itsm/src/main/webapp/WEB-INF/views/frontend/dashboard/itss_dashboard<br>
 
